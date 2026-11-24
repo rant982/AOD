@@ -13,6 +13,18 @@ import androidx.core.graphics.drawable.toBitmap
 
 class NotifService : NotificationListenerService() {
 
+    companion object {
+        @Volatile private var instance: NotifService? = null
+
+        /** Clears a notification from the phone (same as swiping it away in the shade). */
+        fun dismiss(key: String) {
+            try {
+                instance?.cancelNotification(key)
+            } catch (e: Exception) {
+            }
+        }
+    }
+
     private lateinit var msm: MediaSessionManager
     private lateinit var cn: ComponentName
     private var watched: List<MediaController> = emptyList()
@@ -37,6 +49,7 @@ class NotifService : NotificationListenerService() {
     }
 
     override fun onListenerConnected() {
+        instance = this
         Prefs.init(this)
         ensureService()
         msm = getSystemService(MEDIA_SESSION_SERVICE) as MediaSessionManager
@@ -50,6 +63,7 @@ class NotifService : NotificationListenerService() {
     }
 
     override fun onListenerDisconnected() {
+        if (instance === this) instance = null
         try {
             msm.removeOnActiveSessionsChangedListener(sessionsListener)
         } catch (e: Exception) {

@@ -17,7 +17,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.platform.LocalDensity
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -276,6 +281,10 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                     "${n.app} · $txt", color = dim.copy(alpha = if (open) 0.9f else 0.55f), fontSize = if (open) 15.sp else 13.sp,
                                     maxLines = if (open) 12 else 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
                                     modifier = Modifier
+                                        .swipeAway {
+                                            NotifService.dismiss(n.key)
+                                            if (expanded == n.key) expanded = null
+                                        }
                                         .tapOrTriple(
                                             onTap = { expanded = n.key },
                                             onTriple = { activity?.let { a -> openNotification(a, n) } }
@@ -374,3 +383,22 @@ fun appVersion(c: Context): String =
     } catch (e: Exception) {
         "?"
     }
+
+/** Drag sideways past about 100dp and let go to dismiss. Short drags spring back. */
+private fun Modifier.swipeAway(onDismiss: () -> Unit): Modifier = composed {
+    val dismiss by rememberUpdatedState(onDismiss)
+    var dx by remember { mutableFloatStateOf(0f) }
+    val threshold = with(LocalDensity.current) { 100.dp.toPx() }
+    this
+        .offset { IntOffset(dx.roundToInt(), 0) }
+        .pointerInput(Unit) {
+            detectHorizontalDragGestures(
+                onDragEnd = {
+                    if (abs(dx) > threshold) dismiss()
+                    dx = 0f
+                },
+                onDragCancel = { dx = 0f },
+                onHorizontalDrag = { _, d -> dx += d }
+            )
+        }
+}

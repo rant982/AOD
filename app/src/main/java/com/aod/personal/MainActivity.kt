@@ -285,7 +285,7 @@ private fun SettingsScreen() {
         item { SwitchRow("Pixel shift (burn-in protection)", Prefs.pixelShift) { Prefs.pixelShift = it } }
         item { SwitchRow("Go black when face-down or in pocket", Prefs.hideCovered) { Prefs.hideCovered = it } }
         item { SwitchRow("Power button turns the screen fully off (otherwise the AOD comes straight back)", Prefs.powerOff) { Prefs.powerOff = it } }
-        item { Text("Tap an icon (e.g. WhatsApp) to show its text. Triple-tap that text to open the message. Triple-tap the clock to reach the lock screen. Taps anywhere else do nothing, so the pocket is safe.", style = MaterialTheme.typography.bodySmall) }
+        item { Text("Tap an icon (e.g. WhatsApp) to show its text. Triple-tap that text to open the message, or swipe it sideways to clear it. Triple-tap the clock to reach the lock screen. Taps anywhere else do nothing, so the pocket is safe.", style = MaterialTheme.typography.bodySmall) }
     }
 
     if (showBlocked) BlockedAppsDialog { showBlocked = false }
