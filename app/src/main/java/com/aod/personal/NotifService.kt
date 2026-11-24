@@ -136,7 +136,8 @@ class NotifService : NotificationListenerService() {
             )
         }
         NotifRepo.items.value = list
-        if (emit && list.any { n -> old.none { it.key == n.key } }) NotifRepo.events.tryEmit(Unit)
+        val fresh = if (emit) list.firstOrNull { n -> old.none { it.key == n.key } } else null
+        if (fresh != null) NotifRepo.events.tryEmit(fresh.pkg)
     }
 
     private fun watch(list: List<MediaController>) {

@@ -74,6 +74,7 @@ object Prefs {
     var iconStyle by I("iconStyle", 0) // 0 mono, 1 brand colour, 2 app icon
     var showPreview by B("alwaysPreview", false)
     var edgeLight by B("edgeLight", true)
+    var flashIcon by B("flashIcon", true)
     var blocked: Set<String>
         get() = sp.getStringSet("blocked", emptySet())!!.toSet()
         set(v) = sp.edit().putStringSet("blocked", v).apply()

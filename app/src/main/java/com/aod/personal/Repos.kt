@@ -22,7 +22,8 @@ data class CalEvent(val title: String, val begin: Long, val end: Long)
 object NotifRepo {
     val items = MutableStateFlow<List<NotifItem>>(emptyList())
     val media = MutableStateFlow<MediaInfo?>(null)
-    val events = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
+    /** Emits the package name of each genuinely new notification (for edge lighting and the icon flash). */
+    val events = MutableSharedFlow<String>(extraBufferCapacity = 4)
 }
 
 object CalendarRepo {

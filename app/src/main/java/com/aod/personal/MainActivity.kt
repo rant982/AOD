@@ -312,6 +312,7 @@ private fun SettingsScreen() {
         }
         item { SwitchRow("Always show notification text (off = tap an icon to read it)", Prefs.showPreview) { Prefs.showPreview = it } }
         item { SwitchRow("Edge lighting on new notification", Prefs.edgeLight) { Prefs.edgeLight = it } }
+        item { SwitchRow("Flash the icon of a new notification", Prefs.flashIcon) { Prefs.flashIcon = it } }
         item { OutlinedButton({ showBlocked = true }) { Text("Choose apps to hide (${Prefs.blocked.size} hidden)") } }
         item { Text("Tip: tap an icon on the AOD, then 'Never this app' or 'Never this notification'.", style = MaterialTheme.typography.bodySmall) }
         item {

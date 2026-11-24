@@ -58,6 +58,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
@@ -156,6 +158,20 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                 edge.animateTo(1f, tween(500))
                 edge.animateTo(0f, tween(500))
             }
+        }
+    }
+
+    // Icon flash: the new notification's icon pulses bigger and brighter for about 3 seconds.
+    val flash = remember { Animatable(0f) }
+    var flashPkg by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        if (Prefs.flashIcon) NotifRepo.events.collectLatest { pkg ->
+            flashPkg = pkg
+            repeat(4) {
+                flash.animateTo(1f, tween(350))
+                flash.animateTo(0f, tween(350))
+            }
+            flashPkg = null
         }
     }
 
@@ -296,6 +312,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                         ) {
                             notifs.distinctBy { it.pkg }.take(24).forEach { n ->
                                 (if (Prefs.iconStyle == 2) (n.appIcon ?: n.icon) else n.icon)?.let {
+                                    val flashing = n.pkg == flashPkg
                                     Image(
                                         it.asImageBitmap(), null,
                                         Modifier
@@ -305,8 +322,13 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                             )
                                             .alpha(if (Prefs.iconStyle != 0 && expanded != n.key) 0.8f else 1f)
                                             .padding(10.dp)
-                                            .size(26.dp),
-                                        colorFilter = iconTint(n, expanded == n.key, accent, dim)
+                                            .size(26.dp)
+                                            .graphicsLayer {
+                                                val k = if (flashing) flash.value else 0f
+                                                scaleX = 1f + 0.7f * k
+                                                scaleY = 1f + 0.7f * k
+                                            },
+                                        colorFilter = if (flashing && Prefs.iconStyle == 0) ColorFilter.tint(Color.White) else iconTint(n, expanded == n.key, accent, dim)
                                     )
                                 }
                             }
