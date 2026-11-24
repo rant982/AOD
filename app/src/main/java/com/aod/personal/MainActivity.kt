@@ -195,9 +195,15 @@ private fun SettingsScreen() {
                         Text((if (c.ok) "✅ " else if (c.required) "⛔ " else "⚠️ ") + c.title)
                         Text(c.why, style = MaterialTheme.typography.bodySmall)
                     }
-                    if (!c.ok && (c.permission != null || c.intent != null)) Button({
-                        if (c.permission != null) permLauncher.launch(c.permission) else ctx.startActivity(c.intent)
-                    }) { Text("Fix") }
+                    if (!c.ok && (c.permission != null || c.intent != null)) Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Button({
+                            if (c.permission != null) permLauncher.launch(c.permission) else ctx.startActivity(c.intent)
+                        }) { Text(c.fixLabel) }
+                        c.extraIntent?.let { ei -> OutlinedButton({ ctx.startActivity(ei) }) { Text(c.extraLabel ?: "More") } }
+                    }
                 }
             }
             if (level == 1) item {

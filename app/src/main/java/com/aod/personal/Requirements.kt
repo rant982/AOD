@@ -22,7 +22,10 @@ class Check(
     val ok: Boolean,
     val level: Int,
     val intent: Intent? = null,
-    val permission: String? = null
+    val permission: String? = null,
+    val fixLabel: String = "Fix",
+    val extraIntent: Intent? = null,
+    val extraLabel: String? = null
 ) {
     val required get() = level == 0
 }
@@ -53,9 +56,14 @@ object Requirements {
         }
         l += Check(
             "Phone locks as soon as the screen turns off",
-            "Do ONE of these: set Settings > Security > Screen lock > 'Automatically lock' to Immediately, or turn on the My AOD lock helper (Accessibility). Neither stops face or fingerprint unlock.",
+            "Do ONE of these (neither stops face or fingerprint unlock):\n" +
+                "1) Tap 'Lock helper', open My AOD and switch it on. If the switch is greyed out: Settings > Apps > My AOD > the three dots > Allow restricted settings, then try again.\n" +
+                "2) Or tap 'Auto-lock setting' and set 'Automatically lock' to Immediately.",
             helper || lockAfter <= 1000L, 0,
-            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS),
+            fixLabel = "Lock helper",
+            extraIntent = Intent(Settings.ACTION_SECURITY_SETTINGS),
+            extraLabel = "Auto-lock setting"
         )
         l += Check(
             "Screen lock (PIN, pattern or password)", "Without one, locking the phone protects nothing.",
