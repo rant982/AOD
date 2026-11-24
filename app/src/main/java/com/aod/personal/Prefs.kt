@@ -67,7 +67,6 @@ object Prefs {
 
     // Behaviour
     var pixelShift by B("pixelShift", true)
-    var lockOnAod by B("lockOnAod", true)
     var powerOff by B("powerOff", false)
     var hideCovered by B("hideCovered", true)
 

@@ -108,6 +108,7 @@ private fun SettingsScreen() {
     val calendar = remember(tick) { hasPerm(ctx, Manifest.permission.READ_CALENDAR) }
     val adminComp = remember { android.content.ComponentName(ctx, AdminReceiver::class.java) }
     val admin = remember(tick) { ctx.getSystemService(android.app.admin.DevicePolicyManager::class.java).isAdminActive(adminComp) }
+    val secure = remember(tick) { ctx.getSystemService(android.app.KeyguardManager::class.java).isDeviceSecure }
     val location = remember(tick) { hasPerm(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) }
     val ignoringBattery = remember(tick) { (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(ctx.packageName) }
 
@@ -143,6 +144,8 @@ private fun SettingsScreen() {
                 ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}")))
             }
         }
+        item { PermRow("Screen lock set (PIN, pattern or password)", secure) { ctx.startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS)) } }
+        item { Text("The AOD only appears while the phone is locked behind it. If it can't lock the phone, the screen stays off instead.", style = MaterialTheme.typography.bodySmall) }
         item {
             PermRow("Device admin (lets AOD lock the phone)", admin) {
                 ctx.startActivity(
@@ -217,7 +220,6 @@ private fun SettingsScreen() {
         item { Header("Behaviour") }
         item { SwitchRow("Pixel shift (burn-in protection)", Prefs.pixelShift) { Prefs.pixelShift = it } }
         item { SwitchRow("Go black when face-down or in pocket", Prefs.hideCovered) { Prefs.hideCovered = it } }
-        item { SwitchRow("Lock the phone whenever the AOD appears (needs device admin)", Prefs.lockOnAod) { Prefs.lockOnAod = it } }
         item { SwitchRow("Power button turns the screen fully off (otherwise the AOD comes straight back)", Prefs.powerOff) { Prefs.powerOff = it } }
         item { Text("Tap an icon (e.g. WhatsApp) to show its text. Triple-tap the text to open that message. Triple-tap anywhere else to unlock.", style = MaterialTheme.typography.bodySmall) }
     }

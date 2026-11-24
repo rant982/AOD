@@ -157,6 +157,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
 
     // Triple tap to wake
     val taps = remember { mutableListOf<Long>() }
+    val coveredNow by rememberUpdatedState(covered)
 
     Box(
         Modifier
@@ -164,6 +165,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
             .background(Color.Black)
             .pointerInput(Unit) {
                 detectTapGestures(onTap = {
+                    if (coveredNow) return@detectTapGestures
                     val t = System.currentTimeMillis()
                     taps.removeAll { t - it > 800 }
                     taps.add(t)
@@ -332,8 +334,15 @@ private fun openNotification(activity: Activity, n: NotifItem) {
 fun unlockThen(activity: Activity, after: () -> Unit) {
     val km = activity.getSystemService(KeyguardManager::class.java)
     if (km.isKeyguardLocked) {
+        AodState.unlocking = true
         km.requestDismissKeyguard(activity, object : KeyguardManager.KeyguardDismissCallback() {
             override fun onDismissSucceeded() = after()
+            override fun onDismissCancelled() {
+                AodState.unlocking = false
+            }
+            override fun onDismissError() {
+                AodState.unlocking = false
+            }
         })
     } else after()
 }

@@ -1,11 +1,10 @@
 package com.aod.personal
 
+import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
-import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -20,24 +19,27 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 
 /**
- * Watches for the screen turning off and launches the AOD screen.
- * If the AOD is already showing when the screen turns off, that was the power button: close it and stay off.
+ * When the screen turns off (power button or timeout): lock the phone, then show the AOD over the lock screen.
+ * Safety rule: the AOD is only ever shown while Android reports the device as PIN/pattern/password-locked.
  */
 class AodService : Service() {
     private val handler = Handler(Looper.getMainLooper())
-    private var lastLaunch = 0L
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             if (i.action != Intent.ACTION_SCREEN_OFF) return
-            if (System.currentTimeMillis() - lastLaunch < 1500) return
+            if (System.currentTimeMillis() - AodState.lastLaunch < 1500) return
             if (AodState.showing && Prefs.powerOff) {
                 AodState.finish() // power button = fully off
+                lockPhone(this@AodService)
                 return
             }
             AodState.finish()
             handler.removeCallbacksAndMessages(null)
-            handler.post { lockAndLaunch() }
+            handler.post {
+                lockPhone(this@AodService)
+                handler.postDelayed({ launch(true) }, 250)
+            }
         }
     }
 
@@ -63,23 +65,18 @@ class AodService : Service() {
         return START_STICKY
     }
 
-    /** Lock the phone first (needs device admin), then show the AOD over the lock screen. */
-    private fun lockAndLaunch() {
-        if (Prefs.lockOnAod) {
-            val dpm = getSystemService(DevicePolicyManager::class.java)
-            if (dpm.isAdminActive(ComponentName(this, AdminReceiver::class.java))) {
-                try {
-                    dpm.lockNow()
-                } catch (e: SecurityException) {
-                }
-            }
-        }
-        handler.postDelayed({ launch() }, 250)
-    }
-
-    private fun launch() {
+    private fun launch(retry: Boolean) {
         if (!Settings.canDrawOverlays(this)) return
-        lastLaunch = System.currentTimeMillis()
+        val km = getSystemService(KeyguardManager::class.java)
+        if (!km.isDeviceLocked) {
+            // Never show the AOD over an unlocked phone. Try once more, then give up (screen stays off).
+            if (retry) {
+                lockPhone(this)
+                handler.postDelayed({ launch(false) }, 400)
+            }
+            return
+        }
+        AodState.lastLaunch = System.currentTimeMillis()
         startActivity(
             Intent(this, AodActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_ANIMATION)
