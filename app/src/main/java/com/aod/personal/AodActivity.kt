@@ -89,8 +89,8 @@ class AodActivity : ComponentActivity(), SensorEventListener {
         val now = System.currentTimeMillis()
         val awake = getSystemService(PowerManager::class.java).isInteractive
         val idle = getSystemService(AudioManager::class.java).mode == AudioManager.MODE_NORMAL
-        if (!km.isDeviceLocked || !awake || !idle) return@Runnable
-        if (now - AodState.lastNotifAt > 5000 || now - AodState.lastRelaunch < 2000) return@Runnable
+        if (!km.isKeyguardLocked || !awake || !idle) return@Runnable
+        if (now - AodState.lastNotifAt > 10_000 || now - AodState.lastRelaunch < 2000) return@Runnable
         AodState.lastRelaunch = now
         AodState.log("A notification pushed the AOD aside; brought it back.")
         startActivity(
@@ -99,11 +99,29 @@ class AodActivity : ComponentActivity(), SensorEventListener {
         )
     }
 
+    private var notedUnlocked = false
+
+    /**
+     * Safety check, every 2 seconds.
+     * - Phone locked: fine.
+     * - Unlocked by face or fingerprint but the lock screen is still showing (open padlock): leave the AOD alone.
+     * - Lock screen gone altogether: the AOD would be covering an open phone, so close it.
+     */
     private fun ensureLocked() {
-        if (AodState.unlocking || km.isDeviceLocked) return
-        AodState.lastLaunch = 0 // let the service relaunch us after the lock
-        lockPhone(this)
-        handler.postDelayed({ if (!AodState.unlocking && !km.isDeviceLocked) finish() }, 800)
+        if (AodState.unlocking || preview) return
+        if (km.isDeviceLocked) {
+            notedUnlocked = false
+            return
+        }
+        if (km.isKeyguardLocked) {
+            if (!notedUnlocked) {
+                notedUnlocked = true
+                AodState.log("Phone unlocked (face or trust) while the AOD was showing; AOD left in place.")
+            }
+            return
+        }
+        AodState.log("AOD closed: the lock screen was gone (phone already unlocked).")
+        finish()
     }
 
     private fun updateCovered() {
