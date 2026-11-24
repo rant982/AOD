@@ -21,15 +21,27 @@ jobs:
           KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_B64" ] && [ -n "$KEYSTORE_PASSWORD" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/aod.keystore"
-            echo "AOD_KEYSTORE=$RUNNER_TEMP/aod.keystore" >> "$GITHUB_ENV"
-            echo "AOD_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
-            echo "SIGNING=stable" >> "$GITHUB_ENV"
-          else
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
             echo "::warning::No signing secrets found. This build uses a temporary key and will NOT install over the previous version."
             echo "SIGNING=temporary" >> "$GITHUB_ENV"
+            exit 0
           fi
+          # Tolerate stray spaces, quotes, line breaks or extra text around the long line.
+          B64=$(printf '%s' "$KEYSTORE_B64" | tr -d '\r' | grep -oE '[A-Za-z0-9+/=]{200,}' | head -1 || true)
+          PASS=$(printf '%s' "$KEYSTORE_PASSWORD" | tr -d '[:space:]"')
+          echo "KEYSTORE_B64 secret: ${#KEYSTORE_B64} characters stored, ${#B64} usable (the long line should be 3396)."
+          if [ -z "$B64" ] || ! printf '%s' "$B64" | base64 -d > "$RUNNER_TEMP/aod.keystore" 2>/dev/null; then
+            echo "::error::KEYSTORE_B64 is not a valid copy of the long line. Re-paste ONLY the single long line under 'Secret 1' (triple-click it in Notepad). It should be 3396 characters."
+            exit 1
+          fi
+          if ! keytool -list -keystore "$RUNNER_TEMP/aod.keystore" -storepass "$PASS" > /dev/null 2>&1; then
+            echo "::error::KEYSTORE_PASSWORD does not open the key. Re-paste ONLY the short line under 'Secret 2' (28 characters)."
+            exit 1
+          fi
+          echo "AOD_KEYSTORE=$RUNNER_TEMP/aod.keystore" >> "$GITHUB_ENV"
+          echo "AOD_KEYSTORE_PASSWORD=$PASS" >> "$GITHUB_ENV"
+          echo "SIGNING=stable" >> "$GITHUB_ENV"
+          echo "Signing key OK."
       - run: gradle assembleDebug --no-daemon -PbuildNumber=${{ github.run_number }}
       - uses: actions/upload-artifact@v5
         with:
