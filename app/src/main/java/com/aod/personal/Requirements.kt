@@ -25,7 +25,9 @@ class Check(
     val permission: String? = null,
     val fixLabel: String = "Fix",
     val extraIntent: Intent? = null,
-    val extraLabel: String? = null
+    val extraLabel: String? = null,
+    /** false: still shown as required in the app, but never stops the background service starting. */
+    val blocksService: Boolean = true
 ) {
     val required get() = level == 0
 }
@@ -63,7 +65,8 @@ object Requirements {
             Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS),
             fixLabel = "Lock helper",
             extraIntent = Intent(Settings.ACTION_SECURITY_SETTINGS),
-            extraLabel = "Auto-lock setting"
+            extraLabel = "Auto-lock setting",
+            blocksService = false
         )
         l += Check(
             "Screen lock (PIN, pattern or password)", "Without one, locking the phone protects nothing.",
@@ -102,4 +105,7 @@ object Requirements {
     }
 
     fun missingRequired(ctx: Context) = checks(ctx).filter { it.required && !it.ok }
+
+    /** What actually stops the service starting. The lock check is only a warning here: the AOD itself refuses to show over an unlocked phone. */
+    fun missingForService(ctx: Context) = checks(ctx).filter { it.required && !it.ok && it.blocksService }
 }

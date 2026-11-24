@@ -13,6 +13,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Bundle
+import android.view.MotionEvent
 import android.os.Handler
 import android.os.Looper
 import android.view.WindowManager
@@ -63,6 +64,29 @@ object AodState {
     fun finish() {
         activity?.get()?.finish()
     }
+
+    /**
+     * Brings the AOD back to the front if it was pushed aside or closed by the system while the phone is still
+     * locked and awake. Never during calls, alarms or other full-screen notifications, and never more than
+     * 6 times in 30 seconds.
+     */
+    fun maybeRelaunch(ctx: Context, why: String) {
+        val km = ctx.getSystemService(KeyguardManager::class.java)
+        val awake = ctx.getSystemService(PowerManager::class.java).isInteractive
+        val idle = ctx.getSystemService(AudioManager::class.java).mode == AudioManager.MODE_NORMAL
+        val now = System.currentTimeMillis()
+        if (!km.isKeyguardLocked || !awake || !idle) return
+        if (now - lastFullScreenAt < 120_000 || now - lastRelaunch < 1500) return
+        relaunchTimes.removeAll { now - it > 30_000 }
+        if (relaunchTimes.size >= 6) return
+        relaunchTimes.add(now)
+        lastRelaunch = now
+        log("AOD $why; brought it back.")
+        ctx.startActivity(
+            Intent(ctx, AodActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+        )
+    }
 }
 
 class AodActivity : ComponentActivity(), SensorEventListener {
@@ -96,21 +120,11 @@ class AodActivity : ComponentActivity(), SensorEventListener {
      */
     private val relaunch = Runnable {
         if (isFinishing || isDestroyed || preview) return@Runnable
-        val now = System.currentTimeMillis()
-        val awake = getSystemService(PowerManager::class.java).isInteractive
-        val idle = getSystemService(AudioManager::class.java).mode == AudioManager.MODE_NORMAL
-        if (!km.isKeyguardLocked || !awake || !idle) return@Runnable
-        if (now - AodState.lastFullScreenAt < 120_000 || now - AodState.lastRelaunch < 1500) return@Runnable
-        AodState.relaunchTimes.removeAll { now - it > 30_000 }
-        if (AodState.relaunchTimes.size >= 6) return@Runnable
-        AodState.relaunchTimes.add(now)
-        AodState.lastRelaunch = now
-        AodState.log("AOD was pushed aside (Home/edge swipe or system lock screen); brought it back.")
-        startActivity(
-            Intent(this, AodActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NO_ANIMATION)
-        )
+        AodState.maybeRelaunch(this, "was pushed aside (Home/edge swipe or system lock screen)")
     }
+
+    /** True once our own code asked the AOD to close (clock triple-tap, notification open, power button, ...). */
+    private var selfFinished = false
 
     private var notedUnlocked = false
     private var notedGone = false
@@ -212,6 +226,7 @@ class AodActivity : ComponentActivity(), SensorEventListener {
     }
 
     override fun finish() {
+        selfFinished = true
         AodLog.add("AOD finish() called from: " + Throwable().stackTrace.drop(1).take(5).joinToString(" < ") { it.className.substringAfterLast('.') + "." + it.methodName })
         super.finish()
     }
@@ -221,8 +236,45 @@ class AodActivity : ComponentActivity(), SensorEventListener {
         super.onUserLeaveHint()
     }
 
-    override fun onStop() {
-        AodLog.add("AOD stopped finishing=$isFinishing")
+    private var tDown = 0L
+    private var x0 = 0f
+    private var y0 = 0f
+
+    /** Logs each touch as one line (distance, duration, and whether it began at a screen edge). */
+    override fun dispatchTouchEvent(e: MotionEvent): Boolean {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                tDown = e.eventTime
+                x0 = e.rawX
+                y0 = e.rawY
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val dm = resources.displayMetrics
+                val m = 24 * dm.density
+                val edge = when {
+                    x0 < m -> "left-edge"
+                    x0 > dm.widthPixels - m -> "right-edge"
+                    y0 < m * 2 -> "top-edge"
+                    y0 > dm.heightPixels - m * 2 -> "bottom-edge"
+                    else -> ""
+                }
+                AodLog.add("touch ${if (e.actionMasked == MotionEvent.ACTION_UP) "up" else "cancel"} dx=${(e.rawX - x0).toInt()} dy=${(e.rawY - y0).toInt()} ${e.eventTime - tDown}ms $edge")
+            }
+        }
+        return super.dispatchTouchEvent(e)
+    }
+
+    override fun onTopResumedActivityChanged(isTopResumedActivity: Boolean) {
+        super.onTopResumedActivityChanged(isTopResumedActivity)
+        AodLog.add("AOD top-resumed=$isTopResumedActivity")
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        AodLog.add("AOD trimMemory level=$level")
+    }
+
+    override fun onStop() {        AodLog.add("AOD stopped finishing=$isFinishing")
         super.onStop()
     }
 
@@ -232,7 +284,12 @@ class AodActivity : ComponentActivity(), SensorEventListener {
     }
 
     override fun onDestroy() {
-        AodLog.add("AOD destroyed finishing=$isFinishing")
+        AodLog.add("AOD destroyed finishing=$isFinishing selfFinished=$selfFinished")
+        // Closed by the system although nobody here asked: put it back (e.g. it was closed by a swipe or the lock screen).
+        if (isFinishing && !selfFinished && !preview) {
+            val app = applicationContext
+            Handler(Looper.getMainLooper()).postDelayed({ AodState.maybeRelaunch(app, "was closed by the system (nobody asked it to close)") }, 300)
+        }
         unregisterReceiver(dndReceiver)
         handler.removeCallbacksAndMessages(null)
         if (AodState.activity?.get() === this) AodState.activity = null

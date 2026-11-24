@@ -43,9 +43,14 @@ class NotifService : NotificationListenerService() {
     }
 
     /** The system keeps this listener alive, so use it as a watchdog: restart the AOD service if it has died. */
+    private var lastEnsure = 0L
+
     private fun ensureService() {
         Prefs.init(this)
+        val now = System.currentTimeMillis()
+        if (now - lastEnsure < 30_000) return
         if (Prefs.enabled && !AodService.running) {
+            lastEnsure = now
             try {
                 androidx.core.content.ContextCompat.startForegroundService(
                     this, Intent(this, AodService::class.java).putExtra("reason", "keeper")
@@ -80,6 +85,8 @@ class NotifService : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        // Our own foreground/alert notification must never trigger anything (that caused a restart loop).
+        if (sbn.packageName == packageName) return
         ensureService()
         val n = sbn.notification
         AodLog.add("notification posted pkg=${sbn.packageName} category=${n.category}")

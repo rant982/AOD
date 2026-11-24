@@ -42,7 +42,7 @@ class AodService : Service() {
             AodLog.add("SCREEN_OFF $state")
             AodState.pendingOpen = null // never open a stale message after the screen has gone off
             if (System.currentTimeMillis() - AodState.lastLaunch < 1500) return
-            val missing = Requirements.missingRequired(this@AodService)
+            val missing = Requirements.missingForService(this@AodService)
             if (missing.isNotEmpty()) {
                 AodState.log("Screen off: AOD NOT shown. Setup incomplete (${missing.joinToString { it.title }}).")
                 return
@@ -86,7 +86,7 @@ class AodService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel("aod", "AOD running", NotificationManager.IMPORTANCE_MIN))
         nm.createNotificationChannel(NotificationChannel("aod_alert", "AOD can't run", NotificationManager.IMPORTANCE_DEFAULT))
-        val missing = Requirements.missingRequired(this)
+        val missing = Requirements.missingForService(this)
         if (missing.isNotEmpty()) {
             // Refuse to run half-configured: say so, switch off, stop.
             val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
