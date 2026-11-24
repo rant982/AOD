@@ -176,7 +176,7 @@ private fun SettingsScreen() {
                     enabled = ready && enabled && running
                 ) { Text("Lock test: lock phone now") }
                 Text(
-                    "Locks the phone right now. The AOD should appear within a second and a triple-tap should ask for your PIN. If the screen stays off, check \"Last screen-off\" above.",
+                    "Locks the phone right now. The AOD should appear within a second and a triple-tap should show your lock screen, where face or fingerprint work. If the screen stays off, check \"Last screen-off\" above.",
                     style = MaterialTheme.typography.bodySmall
                 )
             }

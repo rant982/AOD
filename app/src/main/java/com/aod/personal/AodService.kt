@@ -33,6 +33,7 @@ class AodService : Service() {
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             if (i.action != Intent.ACTION_SCREEN_OFF) return
+            AodState.pendingOpen = null // never open a stale message after the screen has gone off
             if (System.currentTimeMillis() - AodState.lastLaunch < 1500) return
             val missing = Requirements.missingRequired(this@AodService)
             if (missing.isNotEmpty()) {
@@ -53,11 +54,20 @@ class AodService : Service() {
         }
     }
 
+    private val unlockReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) {
+            val n = AodState.pendingOpen ?: return
+            AodState.pendingOpen = null
+            if (System.currentTimeMillis() - AodState.pendingAt < 60_000) openNotificationNow(this@AodService, n)
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         Prefs.init(this)
         running = true
         registerReceiver(screenReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
+        registerReceiver(unlockReceiver, IntentFilter(Intent.ACTION_USER_PRESENT))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -125,6 +135,7 @@ class AodService : Service() {
     override fun onDestroy() {
         running = false
         unregisterReceiver(screenReceiver)
+        unregisterReceiver(unlockReceiver)
         handler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }

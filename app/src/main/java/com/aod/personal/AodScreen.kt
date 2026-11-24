@@ -1,6 +1,8 @@
 package com.aod.personal
 
 import android.app.Activity
+import android.app.ActivityOptions
+import android.os.Build
 import android.app.KeyguardManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -316,38 +318,42 @@ private fun Modifier.tapOrTriple(onTap: () -> Unit, onTriple: () -> Unit): Modif
     }
 }
 
-/** Unlock if needed, open the notification's app, and close the AOD. */
+/**
+ * Triple-tap on the text: remember which message to open, reveal the real lock screen, and let the service
+ * open it as soon as you unlock (face, fingerprint or PIN, whichever you use).
+ */
 private fun openNotification(activity: Activity, n: NotifItem) {
-    val go = {
-        try {
-            val pi: PendingIntent? = n.intent
-            if (pi != null) pi.send()
-            else activity.packageManager.getLaunchIntentForPackage(n.pkg)?.let { activity.startActivity(it) }
-        } catch (e: Exception) {
-        }
-        activity.finish()
-    }
-    unlockThen(activity, go)
-}
-
-/** Ask for PIN/biometric if the phone is locked, then run [after]. */
-fun unlockThen(activity: Activity, after: () -> Unit) {
     val km = activity.getSystemService(KeyguardManager::class.java)
     if (km.isKeyguardLocked) {
-        AodState.unlocking = true
-        km.requestDismissKeyguard(activity, object : KeyguardManager.KeyguardDismissCallback() {
-            override fun onDismissSucceeded() = after()
-            override fun onDismissCancelled() {
-                AodState.unlocking = false
-            }
-            override fun onDismissError() {
-                AodState.unlocking = false
-            }
-        })
-    } else after()
+        AodState.pendingOpen = n
+        AodState.pendingAt = System.currentTimeMillis()
+    } else {
+        openNotificationNow(activity, n)
+    }
+    activity.finish()
 }
 
-fun unlock(activity: Activity) = unlockThen(activity) { activity.finish() }
+fun openNotificationNow(ctx: Context, n: NotifItem) {
+    try {
+        val pi: PendingIntent? = n.intent
+        if (pi != null) {
+            if (Build.VERSION.SDK_INT >= 34) {
+                val o = ActivityOptions.makeBasic()
+                    .setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
+                pi.send(ctx, 0, null, null, null, null, o.toBundle())
+            } else pi.send()
+        } else {
+            ctx.packageManager.getLaunchIntentForPackage(n.pkg)?.let { ctx.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        }
+    } catch (e: Exception) {
+    }
+}
+
+/**
+ * Triple-tap anywhere else: close the AOD so the real lock screen shows. While the AOD covers the lock screen
+ * Android doesn't listen for face or fingerprint; once it's gone, both work as normal, with PIN only as a fallback.
+ */
+fun unlock(activity: Activity) = activity.finish()
 
 fun appVersion(c: Context): String =
     try {

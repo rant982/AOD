@@ -41,6 +41,10 @@ object AodState {
     /** True while the PIN/biometric prompt is up, so the lock watchdog stays out of the way. */
     @Volatile var unlocking = false
 
+    /** A message to open once the user unlocks (set by a triple-tap on its text). */
+    @Volatile var pendingOpen: NotifItem? = null
+    @Volatile var pendingAt = 0L
+
     fun finish() {
         activity?.get()?.finish()
     }
