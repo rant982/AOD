@@ -238,7 +238,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                 Modifier
                                     .tapOrTriple(
                                         onTap = { expanded = if (expanded == n.key) null else n.key },
-                                        onTriple = { activity?.let { a -> unlock(a) } }
+                                        onTriple = {} // icons only show the text; they never unlock
                                     )
                                     .padding(10.dp)
                                     .size(26.dp),
