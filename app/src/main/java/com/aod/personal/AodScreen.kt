@@ -157,23 +157,11 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
         showVersion = false
     }
 
-    // Triple tap to wake
-    val taps = remember { mutableListOf<Long>() }
-    val coveredNow by rememberUpdatedState(covered)
 
     Box(
         Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(Unit) {
-                detectTapGestures(onTap = {
-                    if (coveredNow) return@detectTapGestures
-                    val t = System.currentTimeMillis()
-                    taps.removeAll { t - it > 800 }
-                    taps.add(t)
-                    if (taps.size >= 3) onWake()
-                })
-            }
             .drawBehind {
                 if (edge.value > 0f) drawRoundRect(
                     brush = Brush.sweepGradient(listOf(accent, Color.Cyan, Color.Magenta, accent)),
@@ -200,6 +188,8 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
 
             val h = SimpleDateFormat(if (Prefs.use24h) "HH" else "h", Locale.getDefault()).format(Date(now))
             val m = SimpleDateFormat("mm", Locale.getDefault()).format(Date(now))
+            // Triple-tap the clock to reach the lock screen. Nothing else on the screen unlocks.
+            Box(Modifier.tapOrTriple(onTap = {}, onTriple = onWake).padding(8.dp)) {
             when (Prefs.clockStyle) {
                 0 -> Text("$h:$m", color = accent, fontFamily = family, fontWeight = FontWeight.Light, fontSize = (88 * scale).sp)
                 1 -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -213,6 +203,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                     },
                     fontFamily = family, fontSize = (88 * scale).sp
                 )
+            }
             }
 
             if (Prefs.showDate) {
