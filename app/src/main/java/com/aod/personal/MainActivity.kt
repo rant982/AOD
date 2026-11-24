@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -142,6 +143,37 @@ private fun SettingsScreen() {
         }
     }
 
+    val checklist: LazyListScope.() -> Unit = {
+        for ((level, title) in listOf(0 to "Required: the app will not run without these", 1 to "Recommended", 2 to "Optional features")) {
+            val group = checks.filter { it.level == level }
+            if (group.isEmpty()) continue
+            item { Header(title) }
+            items(group) { c ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text((if (c.ok) "✅ " else if (c.required) "⛔ " else "⚠️ ") + c.title)
+                        Text(c.why, style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (!c.ok && (c.permission != null || c.intent != null)) Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Button({
+                            if (c.permission != null) permLauncher.launch(c.permission) else ctx.startActivity(c.intent)
+                        }) { Text(c.fixLabel) }
+                        c.extraIntent?.let { ei -> OutlinedButton({ ctx.startActivity(ei) }) { Text(c.extraLabel ?: "More") } }
+                    }
+                }
+            }
+            if (level == 1) item {
+                Text(
+                    "Also check Settings → Security → Smart Lock and turn off On-body detection. Otherwise Android can keep the phone unlocked in your pocket. The app can't detect this setting.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+    }
+
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -152,13 +184,19 @@ private fun SettingsScreen() {
             val (bg, head, body) = when {
                 !ready -> Triple(Color(0xFF5C1A1A), "⛔ AOD can't run yet", "Fix the ${missing.size} required item${if (missing.size == 1) "" else "s"} below. Until then it stays switched off.")
                 !enabled -> Triple(Color(0xFF1F3D2B), "✅ All required checks passed", "Turn on \"Enable always-on display\" below.")
-                running -> Triple(Color(0xFF1F3D2B), "✅ AOD is running", "Switch the screen off and it should appear. Use the lock test below to confirm.")
+                running -> Triple(Color(0xFF1F3D2B), "✅ All required checks passed", "AOD is running. Switch the screen off and it should appear. Use the lock test below to confirm.")
                 else -> Triple(Color(0xFF5A4A16), "⚠️ Enabled, but the service isn't running", "Switch Enable off and on again.")
             }
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = bg)) {
                 Column(Modifier.padding(16.dp)) {
                     Text(head, style = MaterialTheme.typography.titleMedium)
                     Text(body, style = MaterialTheme.typography.bodyMedium)
+                    val todo = checks.count { !it.ok && it.level == 1 }
+                    if (ready && todo > 0) Text(
+                        "⚠️ $todo recommended item${if (todo == 1) "" else "s"} still to do. See the setup checks at the bottom.",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                     Text("Last screen-off: ${AodState.lastEvent}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
                     Text("Service started: ${Prefs.lastStart.ifEmpty { "not yet" }}", style = MaterialTheme.typography.bodySmall)
                     Text("Pixel shift: ${AodState.shiftNote}", style = MaterialTheme.typography.bodySmall)
@@ -204,34 +242,8 @@ private fun SettingsScreen() {
             OutlinedButton({ ctx.startActivity(Intent(ctx, AodActivity::class.java).putExtra("preview", true)) }) { Text("Preview (triple-tap the clock to close)") }
         }
 
-        for ((level, title) in listOf(0 to "Required: the app will not run without these", 1 to "Recommended", 2 to "Optional features")) {
-            val group = checks.filter { it.level == level }
-            if (group.isEmpty()) continue
-            item { Header(title) }
-            items(group) { c ->
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text((if (c.ok) "✅ " else if (c.required) "⛔ " else "⚠️ ") + c.title)
-                        Text(c.why, style = MaterialTheme.typography.bodySmall)
-                    }
-                    if (!c.ok && (c.permission != null || c.intent != null)) Column(
-                        horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Button({
-                            if (c.permission != null) permLauncher.launch(c.permission) else ctx.startActivity(c.intent)
-                        }) { Text(c.fixLabel) }
-                        c.extraIntent?.let { ei -> OutlinedButton({ ctx.startActivity(ei) }) { Text(c.extraLabel ?: "More") } }
-                    }
-                }
-            }
-            if (level == 1) item {
-                Text(
-                    "Also check Settings → Security → Smart Lock and turn off On-body detection. Otherwise Android can keep the phone unlocked in your pocket. The app can't detect this setting.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-        }
+        // When anything required is missing the checklist sits right here; once all is well it moves to the bottom.
+        if (!ready) checklist()
 
         item { Header("Clock") }
         item {
@@ -349,6 +361,10 @@ private fun SettingsScreen() {
                     fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
                 )
             }
+        }
+        if (ready) {
+            item { Header("Setup checks (all required items passed)") }
+            checklist()
         }
     }
 
