@@ -30,6 +30,8 @@ import androidx.compose.ui.platform.LocalDensity
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -83,6 +85,7 @@ import java.util.Date
 import java.util.Locale
 import kotlin.random.Random
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AodScreen(covered: Boolean, onWake: () -> Unit) {
     val ctx = LocalContext.current
@@ -214,11 +217,15 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
             val order = remember { Prefs.orderList() }
             val h = SimpleDateFormat(if (Prefs.use24h) "HH" else "h", Locale.getDefault()).format(Date(now))
             val m = SimpleDateFormat("mm", Locale.getDefault()).format(Date(now))
-            val batteryText = if (Prefs.showBattery && battery.first >= 0) (if (battery.second) "⚡" else "🔋") + " ${battery.first}%" else null
-            val weatherText = weather?.takeIf { Prefs.showWeather }?.let {
-                val t = if (Prefs.fahrenheit) "${Math.round(it.tempC * 9f / 5f + 32)}°F" else "${Math.round(it.tempC)}°C"
-                "${WeatherRepo.emoji(it.code)} $t"
+            val hourC = colorOr(Prefs.clockColor, accent)
+            val minC = when {
+                Prefs.clockMinColor != 0 -> Color(Prefs.clockMinColor)
+                Prefs.clockStyle == 0 -> hourC
+                else -> hourC.copy(alpha = 0.65f)
             }
+            val infoC = colorOr(Prefs.infoColor, dim)
+            val batteryText = if (Prefs.showBattery && battery.first >= 0) (if (battery.second) "⚡" else "🔋") + " ${battery.first}%" else null
+            val weatherText = weather?.takeIf { Prefs.showWeather }?.let { WeatherRepo.format(it, Prefs.fahrenheit, Prefs.weatherStyle) }
 
             // Blocks are drawn in the order chosen in Settings.
             order.forEachIndexed { idx, key ->
@@ -229,15 +236,21 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                         // Triple-tap the clock to reach the lock screen. Nothing else on the screen unlocks.
                         Box(Modifier.tapOrTriple(onTap = {}, onTriple = onWake).padding(8.dp)) {
                             when (Prefs.clockStyle) {
-                                0 -> Text("$h:$m", color = accent, fontFamily = family, fontWeight = FontWeight.Light, fontSize = (88 * scale).sp)
+                                0 -> Text(
+                                    buildAnnotatedString {
+                                        withStyle(SpanStyle(color = hourC)) { append(h) }
+                                        withStyle(SpanStyle(color = minC)) { append(":$m") }
+                                    },
+                                    fontFamily = family, fontWeight = FontWeight.Light, fontSize = (88 * scale).sp
+                                )
                                 1 -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(h, color = accent, fontFamily = family, fontWeight = FontWeight.Bold, fontSize = (110 * scale).sp, lineHeight = (100 * scale).sp)
-                                    Text(m, color = dim, fontFamily = family, fontWeight = FontWeight.Light, fontSize = (110 * scale).sp, lineHeight = (100 * scale).sp)
+                                    Text(h, color = hourC, fontFamily = family, fontWeight = FontWeight.Bold, fontSize = (110 * scale).sp, lineHeight = (100 * scale).sp)
+                                    Text(m, color = minC, fontFamily = family, fontWeight = FontWeight.Light, fontSize = (110 * scale).sp, lineHeight = (100 * scale).sp)
                                 }
                                 else -> Text(
                                     buildAnnotatedString {
-                                        withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = accent)) { append(h) }
-                                        withStyle(SpanStyle(fontWeight = FontWeight.Light, color = dim)) { append(":$m") }
+                                        withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = hourC)) { append(h) }
+                                        withStyle(SpanStyle(fontWeight = FontWeight.Light, color = minC)) { append(":$m") }
                                     },
                                     fontFamily = family, fontSize = (88 * scale).sp
                                 )
@@ -247,7 +260,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
 
                     "DATE" -> if (Prefs.showDate) {
                         val pattern = DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEMMMMd")
-                        Line(SimpleDateFormat(pattern, Locale.getDefault()).format(Date(now)), dim, 18)
+                        Line(SimpleDateFormat(pattern, Locale.getDefault()).format(Date(now)), infoC, 18)
                     }
 
                     // Battery and weather share one line when they sit next to each other in the order.
@@ -263,22 +276,25 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                 else -> null
                             }
                             val line = listOfNotNull(first, second).joinToString("   ")
-                            if (line.isNotEmpty()) Line(line, dim, 16)
+                            if (line.isNotEmpty()) Line(line, infoC, 16)
                         }
                     }
 
                     "CALENDAR" -> event?.takeIf { Prefs.showCalendar }?.let {
                         val time = if (it.begin <= now) "Now" else SimpleDateFormat(if (Prefs.use24h) "HH:mm" else "h:mm a", Locale.getDefault()).format(Date(it.begin))
-                        Line("📅 $time  ${it.title}", dim, 14)
+                        Line("📅 $time  ${it.title}", infoC, 14)
                     }
 
                     "MUSIC" -> media?.takeIf { Prefs.showMusic }?.let {
-                        Line("♪ ${it.title}" + if (it.artist.isNotBlank()) " – ${it.artist}" else "", dim, 14)
+                        Line("♪ ${it.title}" + if (it.artist.isNotBlank()) " – ${it.artist}" else "", infoC, 14)
                     }
 
                     "NOTIFS" -> if (Prefs.showNotifs && notifs.isNotEmpty()) {
-                        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            notifs.distinctBy { it.pkg }.take(8).forEach { n ->
+                        FlowRow(
+                            Modifier.padding(top = 8.dp).fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally)
+                        ) {
+                            notifs.distinctBy { it.pkg }.take(24).forEach { n ->
                                 (if (Prefs.iconStyle == 2) (n.appIcon ?: n.icon) else n.icon)?.let {
                                     Image(
                                         it.asImageBitmap(), null,
@@ -337,8 +353,14 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
 
 @Composable
 private fun Line(text: String, color: Color, size: Int) {
-    Text(text, color = color, fontSize = size.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier)
+    // Long lines (weather description, calendar titles) carry on to a second or third row.
+    Text(
+        text, color = color, fontSize = size.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()
+    )
 }
+
+fun colorOr(v: Int, default: Color): Color = if (v == 0) default else Color(v)
 
 @Composable
 private fun Logo(accent: Color) {
@@ -351,7 +373,7 @@ private fun Logo(accent: Color) {
             bmp?.let { Image(it, null, Modifier.size(72.dp).padding(bottom = 12.dp)) }
         }
         2 -> if (Prefs.logoText.isNotBlank()) Text(
-            Prefs.logoText, color = accent.copy(alpha = 0.8f), fontSize = 20.sp,
+            Prefs.logoText, color = colorOr(Prefs.logoColor, accent.copy(alpha = 0.8f)), fontSize = 20.sp,
             fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 12.dp)
         )
     }

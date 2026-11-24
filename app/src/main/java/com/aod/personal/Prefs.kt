@@ -83,6 +83,18 @@ object Prefs {
         get() = sp.getStringSet("muted", emptySet())!!.toSet()
         set(v) = sp.edit().putStringSet("muted", v).apply()
 
+    // Colours: ARGB, 0 = automatic (follows the main colour)
+    var clockColor by I("clockColor", 0)
+    var clockMinColor by I("clockMinColor", 0)
+    var logoColor by I("logoColor", 0)
+    var infoColor by I("infoColor", 0)
+
+    // 0 short, 1 with description, 2 full (feels like, high and low)
+    var weatherStyle by I("weatherStyle", 1)
+    var wFeels by F("wFeels", -999f)
+    var wHi by F("wHi", -999f)
+    var wLo by F("wLo", -999f)
+
     var blockGap by F("blockGap", 8f) // dp between items on the AOD
     var shiftAmount by I("shiftAmount", 1) // 0 small, 1 medium, 2 large
 

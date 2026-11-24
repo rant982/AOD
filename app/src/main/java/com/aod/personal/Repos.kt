@@ -16,7 +16,7 @@ import java.net.URL
 
 data class NotifItem(val key: String, val pkg: String, val app: String, val title: String, val text: String, val icon: Bitmap?, val intent: PendingIntent?, val color: Int = 0, val appIcon: Bitmap? = null)
 data class MediaInfo(val title: String, val artist: String)
-data class Weather(val tempC: Float, val code: Int)
+data class Weather(val tempC: Float, val code: Int, val feelsC: Float? = null, val hiC: Float? = null, val loC: Float? = null)
 data class CalEvent(val title: String, val begin: Long, val end: Long)
 
 object NotifRepo {
@@ -58,24 +58,76 @@ object WeatherRepo {
     /** Returns cached weather if fresh, otherwise fetches from Open-Meteo. Call off the main thread. */
     fun load(ctx: Context): Weather? {
         val age = System.currentTimeMillis() - Prefs.wTime
-        if (Prefs.wCode >= 0 && age < 30 * 60_000L) return Weather(Prefs.wTemp, Prefs.wCode)
+        if (Prefs.wCode >= 0 && age < 30 * 60_000L) return cached()
         val (lat, lon) = location(ctx) ?: return cached()
         return try {
-            val url = URL("https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,weather_code")
+            val url = URL(
+                "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
+                    "&current=temperature_2m,weather_code,apparent_temperature" +
+                    "&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto"
+            )
             val conn = url.openConnection() as HttpURLConnection
             conn.connectTimeout = 10_000
             conn.readTimeout = 10_000
-            val cur = JSONObject(conn.inputStream.bufferedReader().use { it.readText() }).getJSONObject("current")
+            val root = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+            val cur = root.getJSONObject("current")
             Prefs.wTemp = cur.getDouble("temperature_2m").toFloat()
             Prefs.wCode = cur.getInt("weather_code")
+            Prefs.wFeels = if (cur.has("apparent_temperature")) cur.getDouble("apparent_temperature").toFloat() else -999f
+            val daily = root.optJSONObject("daily")
+            Prefs.wHi = daily?.optJSONArray("temperature_2m_max")?.optDouble(0)?.toFloat() ?: -999f
+            Prefs.wLo = daily?.optJSONArray("temperature_2m_min")?.optDouble(0)?.toFloat() ?: -999f
             Prefs.wTime = System.currentTimeMillis()
-            Weather(Prefs.wTemp, Prefs.wCode)
+            cached()
         } catch (e: Exception) {
             cached()
         }
     }
 
-    private fun cached() = if (Prefs.wCode >= 0) Weather(Prefs.wTemp, Prefs.wCode) else null
+    private fun cached(): Weather? {
+        if (Prefs.wCode < 0) return null
+        fun v(x: Float) = if (x <= -900f || x.isNaN()) null else x
+        return Weather(Prefs.wTemp, Prefs.wCode, v(Prefs.wFeels), v(Prefs.wHi), v(Prefs.wLo))
+    }
+
+    fun description(code: Int) = when (code) {
+        0 -> "clear"
+        1 -> "mostly clear"
+        2 -> "partly cloudy"
+        3 -> "cloudy"
+        45, 48 -> "foggy"
+        51, 53, 55 -> "drizzle"
+        56, 57 -> "freezing drizzle"
+        61 -> "light rain"
+        63 -> "rain"
+        65 -> "heavy rain"
+        66, 67 -> "freezing rain"
+        71 -> "light snow"
+        73 -> "snow"
+        75 -> "heavy snow"
+        77 -> "snow grains"
+        80 -> "light showers"
+        81 -> "showers"
+        82 -> "heavy showers"
+        85, 86 -> "snow showers"
+        95 -> "thunderstorm"
+        96, 99 -> "thunderstorm with hail"
+        else -> "unsettled"
+    }
+
+    /** style 0: "☁️ 3°C"; 1: "☁️ 3°C and cloudy"; 2: adds feels-like and today's high and low. */
+    fun format(w: Weather, fahrenheit: Boolean, style: Int): String {
+        fun t(c: Float) = if (fahrenheit) "${Math.round(c * 9f / 5f + 32)}°F" else "${Math.round(c)}°C"
+        val base = "${emoji(w.code)} ${t(w.tempC)}"
+        if (style == 0) return base
+        return buildString {
+            append("$base and ${description(w.code)}")
+            if (style >= 2) {
+                w.feelsC?.let { append(", feels like ${t(it)}") }
+                if (w.hiC != null && w.loC != null) append(" · High ${t(w.hiC)}, low ${t(w.loC)}")
+            }
+        }
+    }
 
     private fun location(ctx: Context): Pair<Double, Double>? {
         val la = Prefs.lat.trim().toDoubleOrNull()

@@ -14,7 +14,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -238,6 +245,8 @@ private fun SettingsScreen() {
         item { SwitchRow("24-hour clock", Prefs.use24h) { Prefs.use24h = it } }
         item { SliderRow("Colour", Prefs.hue, 0f..360f) { Prefs.hue = it } }
         item { SliderRow("Colour saturation (left = white)", Prefs.sat, 0f..1f) { Prefs.sat = it } }
+        item { ColorSetting("Time colour (hours)", Prefs.clockColor, "Same as main colour") { Prefs.clockColor = it } }
+        item { ColorSetting("Minutes colour", Prefs.clockMinColor, "Automatic") { Prefs.clockMinColor = it } }
         item { SliderRow("Clock size", Prefs.clockScale, 0.6f..1.4f) { Prefs.clockScale = it } }
         item { SliderRow("Spacing between items", Prefs.blockGap, 0f..60f) { Prefs.blockGap = it } }
         item { Text("Daytime brightness follows your phone's brightness setting (including automatic).", style = MaterialTheme.typography.bodySmall) }
@@ -257,12 +266,18 @@ private fun SettingsScreen() {
             var text by remember { mutableStateOf(Prefs.logoText) }
             OutlinedTextField(text, { text = it; Prefs.logoText = it }, Modifier.fillMaxWidth(), label = { Text("Logo text") }, singleLine = true)
         }
+        item { ColorSetting("Logo text colour", Prefs.logoColor, "Automatic") { Prefs.logoColor = it } }
 
         item { Header("Info lines") }
+        item { ColorSetting("Info line colour (date, battery, weather, calendar, music)", Prefs.infoColor, "Automatic") { Prefs.infoColor = it } }
         item { SwitchRow("Date", Prefs.showDate) { Prefs.showDate = it } }
         item { SwitchRow("Battery", Prefs.showBattery) { Prefs.showBattery = it } }
         item { SwitchRow("Weather", Prefs.showWeather) { Prefs.showWeather = it } }
         item { SwitchRow("Use °F", Prefs.fahrenheit) { Prefs.fahrenheit = it } }
+        item {
+            var style by remember { mutableIntStateOf(Prefs.weatherStyle) }
+            Chips("Weather detail", listOf("Short", "With description", "Full"), style) { style = it; Prefs.weatherStyle = it }
+        }
         item {
             var lat by remember { mutableStateOf(Prefs.lat) }
             var lon by remember { mutableStateOf(Prefs.lon) }
@@ -442,5 +457,46 @@ private fun OrderEditor() {
             }
         }
         OutlinedButton({ save(Prefs.ALL_BLOCKS) }) { Text("Reset order") }
+    }
+}
+
+
+private val SWATCHES = listOf(
+    0xFFFFFFFF, 0xFFFFE9C4, 0xFF9E9E9E, 0xFFFF5252, 0xFFFF9800, 0xFFFFC107, 0xFFFFEB3B,
+    0xFF66BB6A, 0xFF4DD0A1, 0xFF26C6DA, 0xFF5C9DFF, 0xFFB388FF, 0xFFFF80AB
+).map { it.toInt() }
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ColorSetting(label: String, initial: Int, autoLabel: String, onChange: (Int) -> Unit) {
+    var cur by remember { mutableIntStateOf(initial) }
+    var hue by remember { mutableFloatStateOf(0f) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(label, style = MaterialTheme.typography.bodySmall)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton({
+                cur = 0
+                onChange(0)
+            }) { Text(if (cur == 0) "✓ $autoLabel" else autoLabel) }
+            SWATCHES.forEach { c ->
+                Box(
+                    Modifier
+                        .size(36.dp)
+                        .background(Color(c), CircleShape)
+                        .border(if (cur == c) 3.dp else 1.dp, if (cur == c) Color.White else Color.Gray, CircleShape)
+                        .clickable {
+                            cur = c
+                            onChange(c)
+                        }
+                )
+            }
+        }
+        Text("Or slide for any colour", style = MaterialTheme.typography.bodySmall)
+        Slider(hue, {
+            hue = it
+            val c = android.graphics.Color.HSVToColor(floatArrayOf(it, 1f, 1f))
+            cur = c
+            onChange(c)
+        }, valueRange = 0f..360f)
     }
 }
