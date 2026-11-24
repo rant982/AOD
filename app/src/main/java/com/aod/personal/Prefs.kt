@@ -9,6 +9,7 @@ object Prefs {
     private lateinit var sp: SharedPreferences
 
     fun init(c: Context) {
+        AodLog.init(c)
         if (!::sp.isInitialized) sp = c.applicationContext.getSharedPreferences("aod", Context.MODE_PRIVATE)
     }
 
@@ -76,6 +77,14 @@ object Prefs {
     var blocked: Set<String>
         get() = sp.getStringSet("blocked", emptySet())!!.toSet()
         set(v) = sp.edit().putStringSet("blocked", v).apply()
+
+    /** Notifications hidden for good, stored as "package|title". */
+    var muted: Set<String>
+        get() = sp.getStringSet("muted", emptySet())!!.toSet()
+        set(v) = sp.edit().putStringSet("muted", v).apply()
+
+    var blockGap by F("blockGap", 8f) // dp between items on the AOD
+    var shiftAmount by I("shiftAmount", 1) // 0 small, 1 medium, 2 large
 
     // Behaviour
     var pixelShift by B("pixelShift", true)
