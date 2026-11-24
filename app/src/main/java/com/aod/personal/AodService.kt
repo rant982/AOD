@@ -4,6 +4,8 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -23,15 +25,19 @@ import androidx.core.app.ServiceCompat
  */
 class AodService : Service() {
     private val handler = Handler(Looper.getMainLooper())
+    private var lastLaunch = 0L
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             if (i.action != Intent.ACTION_SCREEN_OFF) return
-            if (AodState.showing) {
-                AodState.finish()
-            } else {
-                handler.postDelayed({ launch() }, 300)
+            if (System.currentTimeMillis() - lastLaunch < 1500) return
+            if (AodState.showing && Prefs.powerOff) {
+                AodState.finish() // power button = fully off
+                return
             }
+            AodState.finish()
+            handler.removeCallbacksAndMessages(null)
+            handler.post { lockAndLaunch() }
         }
     }
 
@@ -57,8 +63,23 @@ class AodService : Service() {
         return START_STICKY
     }
 
+    /** Lock the phone first (needs device admin), then show the AOD over the lock screen. */
+    private fun lockAndLaunch() {
+        if (Prefs.lockOnAod) {
+            val dpm = getSystemService(DevicePolicyManager::class.java)
+            if (dpm.isAdminActive(ComponentName(this, AdminReceiver::class.java))) {
+                try {
+                    dpm.lockNow()
+                } catch (e: SecurityException) {
+                }
+            }
+        }
+        handler.postDelayed({ launch() }, 250)
+    }
+
     private fun launch() {
-        if (AodState.showing || !Settings.canDrawOverlays(this)) return
+        if (!Settings.canDrawOverlays(this)) return
+        lastLaunch = System.currentTimeMillis()
         startActivity(
             Intent(this, AodActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_ANIMATION)

@@ -72,7 +72,7 @@ class AodActivity : ComponentActivity(), SensorEventListener {
         )
         AodState.activity = WeakReference(this)
         sm = getSystemService(SENSOR_SERVICE) as SensorManager
-        setContent { AodScreen(covered = covered, onWake = { finish() }) }
+        setContent { AodScreen(covered = covered, onWake = { unlock(this) }) }
     }
 
     override fun onResume() {

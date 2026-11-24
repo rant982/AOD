@@ -106,6 +106,8 @@ private fun SettingsScreen() {
     val overlay = remember(tick) { Settings.canDrawOverlays(ctx) }
     val postNotif = remember(tick) { Build.VERSION.SDK_INT < 33 || hasPerm(ctx, Manifest.permission.POST_NOTIFICATIONS) }
     val calendar = remember(tick) { hasPerm(ctx, Manifest.permission.READ_CALENDAR) }
+    val adminComp = remember { android.content.ComponentName(ctx, AdminReceiver::class.java) }
+    val admin = remember(tick) { ctx.getSystemService(android.app.admin.DevicePolicyManager::class.java).isAdminActive(adminComp) }
     val location = remember(tick) { hasPerm(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) }
     val ignoringBattery = remember(tick) { (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(ctx.packageName) }
 
@@ -113,7 +115,12 @@ private fun SettingsScreen() {
     var showBlocked by remember { mutableStateOf(false) }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        item { Text("My AOD", style = MaterialTheme.typography.headlineMedium) }
+        item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("My AOD", style = MaterialTheme.typography.headlineMedium)
+                Text("v${appVersion(ctx)}", style = MaterialTheme.typography.bodySmall)
+            }
+        }
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Enable always-on display", Modifier.weight(1f))
@@ -134,6 +141,15 @@ private fun SettingsScreen() {
         item {
             PermRow("Draw over other apps (required)", overlay) {
                 ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}")))
+            }
+        }
+        item {
+            PermRow("Device admin (lets AOD lock the phone)", admin) {
+                ctx.startActivity(
+                    Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+                        .putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComp)
+                        .putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Lets My AOD lock the phone when the always-on display appears. It cannot do anything else.")
+                )
             }
         }
         item { PermRow("Show service notification", postNotif) { permLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) } }
@@ -201,7 +217,9 @@ private fun SettingsScreen() {
         item { Header("Behaviour") }
         item { SwitchRow("Pixel shift (burn-in protection)", Prefs.pixelShift) { Prefs.pixelShift = it } }
         item { SwitchRow("Go black when face-down or in pocket", Prefs.hideCovered) { Prefs.hideCovered = it } }
-        item { Text("Tap a notification icon to read it. Triple-tap a notification to open its app. Triple-tap anywhere else to wake the phone. Press power to turn the screen fully off.", style = MaterialTheme.typography.bodySmall) }
+        item { SwitchRow("Lock the phone whenever the AOD appears (needs device admin)", Prefs.lockOnAod) { Prefs.lockOnAod = it } }
+        item { SwitchRow("Power button turns the screen fully off (otherwise the AOD comes straight back)", Prefs.powerOff) { Prefs.powerOff = it } }
+        item { Text("Tap an icon (e.g. WhatsApp) to show its text. Triple-tap the text to open that message. Triple-tap anywhere else to unlock.", style = MaterialTheme.typography.bodySmall) }
     }
 
     if (showBlocked) BlockedAppsDialog { showBlocked = false }

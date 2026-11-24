@@ -149,6 +149,11 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
 
     val activity = ctx as? Activity
     var expanded by remember { mutableStateOf<String?>(null) }
+    var showVersion by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(10_000)
+        showVersion = false
+    }
 
     // Triple tap to wake
     val taps = remember { mutableListOf<Long>() }
@@ -174,6 +179,10 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                 )
             }
     ) {
+        if (!covered && showVersion) Text(
+            "v${appVersion(ctx)}", color = dim.copy(alpha = 0.5f), fontSize = 11.sp,
+            modifier = Modifier.align(Alignment.TopEnd).systemBarsPadding().padding(12.dp)
+        )
         if (!covered) Column(
             Modifier
                 .fillMaxSize()
@@ -234,7 +243,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                 Modifier
                                     .tapOrTriple(
                                         onTap = { expanded = if (expanded == n.key) null else n.key },
-                                        onTriple = { activity?.let { a -> openNotification(a, n) } }
+                                        onTriple = { activity?.let { a -> unlock(a) } }
                                     )
                                     .padding(10.dp)
                                     .size(26.dp),
@@ -253,7 +262,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                             maxLines = if (open) 12 else 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
                             modifier = Modifier
                                 .tapOrTriple(
-                                    onTap = { expanded = if (open) null else n.key },
+                                    onTap = { expanded = n.key },
                                     onTriple = { activity?.let { a -> openNotification(a, n) } }
                                 )
                                 .padding(vertical = 6.dp, horizontal = 8.dp)
@@ -316,10 +325,24 @@ private fun openNotification(activity: Activity, n: NotifItem) {
         }
         activity.finish()
     }
+    unlockThen(activity, go)
+}
+
+/** Ask for PIN/biometric if the phone is locked, then run [after]. */
+fun unlockThen(activity: Activity, after: () -> Unit) {
     val km = activity.getSystemService(KeyguardManager::class.java)
     if (km.isKeyguardLocked) {
         km.requestDismissKeyguard(activity, object : KeyguardManager.KeyguardDismissCallback() {
-            override fun onDismissSucceeded() = go()
+            override fun onDismissSucceeded() = after()
         })
-    } else go()
+    } else after()
 }
+
+fun unlock(activity: Activity) = unlockThen(activity) { activity.finish() }
+
+fun appVersion(c: Context): String =
+    try {
+        c.packageManager.getPackageInfo(c.packageName, 0).versionName ?: "?"
+    } catch (e: Exception) {
+        "?"
+    }

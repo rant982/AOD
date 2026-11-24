@@ -3,6 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val build = (project.findProperty("buildNumber") as String?)?.toIntOrNull() ?: 1
+
 android {
     namespace = "com.aod.personal"
     compileSdk = 34
@@ -10,8 +12,8 @@ android {
         applicationId = "com.aod.personal"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = build
+        versionName = "1.1.$build"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
