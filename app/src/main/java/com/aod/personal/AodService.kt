@@ -74,6 +74,7 @@ class AodService : Service() {
         super.onCreate()
         Prefs.init(this)
         running = true
+        AodLog.add("service created")
         registerReceiver(screenReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
             addAction(Intent.ACTION_SCREEN_ON)
@@ -122,7 +123,7 @@ class AodService : Service() {
             else -> "from the app"
         }
         Prefs.lastStart = java.text.SimpleDateFormat("EEE d MMM HH:mm", java.util.Locale.getDefault()).format(java.util.Date()) + " ($why)"
-        AodLog.add("service started $why")
+        AodLog.add("service started $why (${if (intent == null) "system restart, no intent" else "explicit start"})")
         return START_STICKY
     }
 
@@ -152,6 +153,7 @@ class AodService : Service() {
 
     override fun onDestroy() {
         running = false
+        AodLog.add("service destroyed")
         unregisterReceiver(screenReceiver)
         unregisterReceiver(unlockReceiver)
         handler.removeCallbacksAndMessages(null)

@@ -17,6 +17,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +37,10 @@ object AodState {
     /** When an ordinary (non-call, non-alarm) notification last arrived, and when we last brought the AOD back. */
     @Volatile var lastNotifAt = 0L
     @Volatile var lastRelaunch = 0L
+
+    /** Last call/alarm/full-screen notification: never fight those for the screen. */
+    @Volatile var lastFullScreenAt = 0L
+    val relaunchTimes = mutableListOf<Long>()
 
     /** Plain-English result of the most recent screen-off, shown in the self-test. */
     @Volatile var lastEvent = "none yet"
@@ -85,8 +90,9 @@ class AodActivity : ComponentActivity(), SensorEventListener {
     }
 
     /**
-     * If a new notification makes the phone push its own lock screen over the AOD, bring the AOD back.
-     * Only for ordinary notifications while the phone is locked and awake, never during a call or alarm.
+     * If anything pushes the AOD aside while the phone is still locked and awake (a Home or edge swipe, the system
+     * lock screen coming forward after a notification), bring it back. Leaving is only by triple-tapping the clock.
+     * Never during calls, alarms or other full-screen notifications, and never more than 6 times in 30 seconds.
      */
     private val relaunch = Runnable {
         if (isFinishing || isDestroyed || preview) return@Runnable
@@ -94,9 +100,12 @@ class AodActivity : ComponentActivity(), SensorEventListener {
         val awake = getSystemService(PowerManager::class.java).isInteractive
         val idle = getSystemService(AudioManager::class.java).mode == AudioManager.MODE_NORMAL
         if (!km.isKeyguardLocked || !awake || !idle) return@Runnable
-        if (now - AodState.lastNotifAt > 10_000 || now - AodState.lastRelaunch < 2000) return@Runnable
+        if (now - AodState.lastFullScreenAt < 120_000 || now - AodState.lastRelaunch < 1500) return@Runnable
+        AodState.relaunchTimes.removeAll { now - it > 30_000 }
+        if (AodState.relaunchTimes.size >= 6) return@Runnable
+        AodState.relaunchTimes.add(now)
         AodState.lastRelaunch = now
-        AodState.log("A notification pushed the AOD aside; brought it back.")
+        AodState.log("AOD was pushed aside (Home/edge swipe or system lock screen); brought it back.")
         startActivity(
             Intent(this, AodActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NO_ANIMATION)
@@ -157,6 +166,8 @@ class AodActivity : ComponentActivity(), SensorEventListener {
         super.onCreate(savedInstanceState)
         Prefs.init(this)
         AodLog.add("AOD created preview=$preview")
+        // A Back swipe (or an edge-gesture app) must never close the AOD. Only triple-tapping the clock does.
+        onBackPressedDispatcher.addCallback(this) { AodLog.add("Back gesture ignored") }
         setShowWhenLocked(true)
         setTurnScreenOn(true)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -177,7 +188,7 @@ class AodActivity : ComponentActivity(), SensorEventListener {
         km = getSystemService(KeyguardManager::class.java)
         hasProx = sm.getDefaultSensor(Sensor.TYPE_PROXIMITY) != null
         updateCovered()
-        setContent { AodScreen(covered = covered, onWake = { unlock(this) }) }
+        setContent { AodScreen(covered = covered, onWake = { AodLog.add("Triple-tap on the clock"); unlock(this) }) }
     }
 
     override fun onResume() {
@@ -198,6 +209,16 @@ class AodActivity : ComponentActivity(), SensorEventListener {
         handler.removeCallbacks(guard)
         if (!isFinishing) handler.postDelayed(relaunch, 400)
         sm.unregisterListener(this)
+    }
+
+    override fun finish() {
+        AodLog.add("AOD finish() called from: " + Throwable().stackTrace.drop(1).take(5).joinToString(" < ") { it.className.substringAfterLast('.') + "." + it.methodName })
+        super.finish()
+    }
+
+    override fun onUserLeaveHint() {
+        AodLog.add("User left the AOD (Home or recents gesture)")
+        super.onUserLeaveHint()
     }
 
     override fun onStop() {

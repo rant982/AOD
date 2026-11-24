@@ -145,7 +145,10 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
     // Edge lighting
     val edge = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
+        var lastEdge = 0L
         if (Prefs.edgeLight) NotifRepo.events.collect {
+            if (System.currentTimeMillis() - lastEdge < 8000) return@collect
+            lastEdge = System.currentTimeMillis()
             repeat(3) {
                 edge.animateTo(1f, tween(500))
                 edge.animateTo(0f, tween(500))
@@ -377,6 +380,7 @@ private fun Modifier.tapOrTriple(onTap: () -> Unit, onTriple: () -> Unit): Modif
  * open it as soon as you unlock (face, fingerprint or PIN, whichever you use).
  */
 private fun openNotification(activity: Activity, n: NotifItem) {
+    AodLog.add("Triple-tap on notification text pkg=${n.pkg}")
     val km = activity.getSystemService(KeyguardManager::class.java)
     when {
         activity.intent.getBooleanExtra("preview", false) -> {

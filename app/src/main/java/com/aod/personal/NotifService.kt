@@ -13,6 +13,8 @@ import androidx.core.graphics.drawable.toBitmap
 
 class NotifService : NotificationListenerService() {
 
+    private val appIconCache = HashMap<String, android.graphics.Bitmap?>()
+
     companion object {
         @Volatile private var instance: NotifService? = null
 
@@ -81,9 +83,11 @@ class NotifService : NotificationListenerService() {
         ensureService()
         val n = sbn.notification
         AodLog.add("notification posted pkg=${sbn.packageName} category=${n.category}")
-        if (sbn.packageName != packageName && n.fullScreenIntent == null &&
-            n.category != Notification.CATEGORY_CALL && n.category != Notification.CATEGORY_ALARM
-        ) AodState.lastNotifAt = System.currentTimeMillis()
+        if (n.fullScreenIntent != null || n.category == Notification.CATEGORY_CALL || n.category == Notification.CATEGORY_ALARM) {
+            AodState.lastFullScreenAt = System.currentTimeMillis()
+        } else if (sbn.packageName != packageName) {
+            AodState.lastNotifAt = System.currentTimeMillis()
+        }
         refresh(true)
     }
     override fun onNotificationRemoved(sbn: StatusBarNotification) = refresh(false)
@@ -119,11 +123,11 @@ class NotifService : NotificationListenerService() {
                 text = (ex.getCharSequence(Notification.EXTRA_TEXT) ?: ex.getCharSequence(Notification.EXTRA_BIG_TEXT))?.toString().orEmpty(),
                 intent = sbn.notification.contentIntent,
                 color = sbn.notification.color,
-                appIcon = try {
+                appIcon = appIconCache.getOrPut(sbn.packageName) { try {
                     packageManager.getApplicationIcon(sbn.packageName).toBitmap(64, 64)
                 } catch (e: Exception) {
                     null
-                },
+                } },
                 icon = try {
                     sbn.notification.smallIcon?.loadDrawable(this)?.toBitmap(64, 64)
                 } catch (e: Exception) {
@@ -132,7 +136,7 @@ class NotifService : NotificationListenerService() {
             )
         }
         NotifRepo.items.value = list
-        if (emit && list.any { n -> old.none { it.key == n.key && it.text == n.text } }) NotifRepo.events.tryEmit(Unit)
+        if (emit && list.any { n -> old.none { it.key == n.key } }) NotifRepo.events.tryEmit(Unit)
     }
 
     private fun watch(list: List<MediaController>) {
