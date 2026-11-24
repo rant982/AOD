@@ -10,7 +10,7 @@ Personal always-on display for Android (8.0+). Kotlin + Jetpack Compose. Not aff
 
 ## How it works
 A foreground service watches for screen-off and launches a black, dimmed full-screen activity over the lock screen.
-- Tap an icon to show its text; triple-tap the text to open that message; triple-tap anywhere else to reach the lock screen (face, fingerprint or PIN). Needs the Device admin grant so the phone is locked whenever the AOD appears.
+- Tap an icon to show its text; triple-tap the text to open that message; triple-tap anywhere else to reach the lock screen (face, fingerprint or PIN). The phone is locked via the normal lock screen (set "Automatically lock" to Immediately, or enable the My AOD lock helper), so face and fingerprint keep working.
 - Power button turns the screen fully off; it shows the AOD again after the normal screen timeout.
 - Face-down or in a pocket: the display goes solid black.
 

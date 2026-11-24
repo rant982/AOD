@@ -44,13 +44,18 @@ object Requirements {
             Settings.canDrawOverlays(ctx), 0,
             Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}"))
         )
-        val comp = ComponentName(ctx, AdminReceiver::class.java)
+        val helper = Settings.Secure.getString(ctx.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+            ?.contains("${ctx.packageName}/") == true
+        val lockAfter = try {
+            Settings.Secure.getLong(ctx.contentResolver, "lock_screen_lock_after_timeout", 5000L)
+        } catch (e: Exception) {
+            5000L
+        }
         l += Check(
-            "Device admin", "Lets the app lock the phone behind the AOD. It gets the lock-screen right only.",
-            ctx.getSystemService(DevicePolicyManager::class.java).isAdminActive(comp), 0,
-            Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
-                .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, comp)
-                .putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Lets My AOD lock the phone when the always-on display appears. It cannot do anything else.")
+            "Phone locks as soon as the screen turns off",
+            "Do ONE of these: set Settings > Security > Screen lock > 'Automatically lock' to Immediately, or turn on the My AOD lock helper (Accessibility). Neither stops face or fingerprint unlock.",
+            helper || lockAfter <= 1000L, 0,
+            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
         )
         l += Check(
             "Screen lock (PIN, pattern or password)", "Without one, locking the phone protects nothing.",

@@ -48,7 +48,7 @@ class AodService : Service() {
             AodState.finish()
             handler.removeCallbacksAndMessages(null)
             handler.post {
-                lockPhone(this@AodService)
+                if (!getSystemService(KeyguardManager::class.java).isDeviceLocked) lockPhone(this@AodService)
                 handler.postDelayed({ launch(true) }, 250)
             }
         }
@@ -120,7 +120,7 @@ class AodService : Service() {
                 lockPhone(this)
                 handler.postDelayed({ launch(false) }, 400)
             } else {
-                AodState.log("AOD NOT shown: Android says the phone isn't locked (Device admin missing, or Smart Lock keeping it open). Screen left off.")
+                AodState.log("AOD NOT shown: Android says the phone isn't locked yet (set 'Automatically lock' to Immediately or enable the lock helper; or Smart Lock is keeping it open). Screen left off.")
             }
             return
         }

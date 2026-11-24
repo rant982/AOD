@@ -124,7 +124,7 @@ private fun SettingsScreen() {
     var enabled by remember { mutableStateOf(Prefs.enabled) }
     var showBlocked by remember { mutableStateOf(false) }
 
-    // Never leave the AOD switched on if setup has broken (e.g. device admin revoked).
+    // Never leave the AOD switched on if setup has broken (e.g. a permission revoked).
     LaunchedEffect(tick) {
         if (Prefs.enabled && !ready) {
             Prefs.enabled = false
