@@ -158,7 +158,9 @@ private fun SettingsScreen() {
         item { SliderRow("Colour", Prefs.hue, 0f..360f) { Prefs.hue = it } }
         item { SliderRow("Colour saturation (left = white)", Prefs.sat, 0f..1f) { Prefs.sat = it } }
         item { SliderRow("Clock size", Prefs.clockScale, 0.6f..1.4f) { Prefs.clockScale = it } }
-        item { SliderRow("Brightness", Prefs.brightness, 0.01f..0.6f) { Prefs.brightness = it } }
+        item { Text("Daytime brightness follows your phone's brightness setting (including automatic).", style = MaterialTheme.typography.bodySmall) }
+        item { SwitchRow("Dim at night when Do Not Disturb is on", Prefs.nightDim) { Prefs.nightDim = it } }
+        item { SliderRow("Night brightness (left = lowest)", Prefs.nightBrightness, 0f..0.2f) { Prefs.nightBrightness = it } }
 
         item { Header("Logo") }
         item {
@@ -192,14 +194,14 @@ private fun SettingsScreen() {
 
         item { Header("Notifications") }
         item { SwitchRow("Notification icons", Prefs.showNotifs) { Prefs.showNotifs = it } }
-        item { SwitchRow("Text previews", Prefs.showPreview) { Prefs.showPreview = it } }
+        item { SwitchRow("Always show notification text (off = tap an icon to read it)", Prefs.showPreview) { Prefs.showPreview = it } }
         item { SwitchRow("Edge lighting on new notification", Prefs.edgeLight) { Prefs.edgeLight = it } }
         item { OutlinedButton({ showBlocked = true }) { Text("Choose apps to hide (${Prefs.blocked.size} hidden)") } }
 
         item { Header("Behaviour") }
         item { SwitchRow("Pixel shift (burn-in protection)", Prefs.pixelShift) { Prefs.pixelShift = it } }
         item { SwitchRow("Go black when face-down or in pocket", Prefs.hideCovered) { Prefs.hideCovered = it } }
-        item { Text("Triple-tap the screen to wake the phone. Press power to turn the screen fully off.", style = MaterialTheme.typography.bodySmall) }
+        item { Text("Tap a notification icon to read it. Triple-tap a notification to open its app. Triple-tap anywhere else to wake the phone. Press power to turn the screen fully off.", style = MaterialTheme.typography.bodySmall) }
     }
 
     if (showBlocked) BlockedAppsDialog { showBlocked = false }

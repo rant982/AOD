@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ContentUris
 import android.content.Context
 import android.content.pm.PackageManager
+import android.app.PendingIntent
 import android.graphics.Bitmap
 import android.location.LocationManager
 import android.provider.CalendarContract
@@ -13,7 +14,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-data class NotifItem(val key: String, val pkg: String, val app: String, val title: String, val text: String, val icon: Bitmap?)
+data class NotifItem(val key: String, val pkg: String, val app: String, val title: String, val text: String, val icon: Bitmap?, val intent: PendingIntent?)
 data class MediaInfo(val title: String, val artist: String)
 data class Weather(val tempC: Float, val code: Int)
 data class CalEvent(val title: String, val begin: Long, val end: Long)

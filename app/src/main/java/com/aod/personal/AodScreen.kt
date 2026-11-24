@@ -1,5 +1,8 @@
 package com.aod.personal
 
+import android.app.Activity
+import android.app.KeyguardManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -27,6 +30,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.composed
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -142,6 +147,9 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
     }
     val shiftAnim by animateIntOffsetAsState(shift, tween(3000), label = "shift")
 
+    val activity = ctx as? Activity
+    var expanded by remember { mutableStateOf<String?>(null) }
+
     // Triple tap to wake
     val taps = remember { mutableListOf<Long>() }
 
@@ -218,18 +226,37 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
             }
 
             if (Prefs.showNotifs && notifs.isNotEmpty()) {
-                Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     notifs.distinctBy { it.pkg }.take(8).forEach { n ->
-                        n.icon?.let { Image(it.asImageBitmap(), null, Modifier.size(26.dp), colorFilter = ColorFilter.tint(dim)) }
+                        n.icon?.let {
+                            Image(
+                                it.asImageBitmap(), null,
+                                Modifier
+                                    .tapOrTriple(
+                                        onTap = { expanded = if (expanded == n.key) null else n.key },
+                                        onTriple = { activity?.let { a -> openNotification(a, n) } }
+                                    )
+                                    .padding(10.dp)
+                                    .size(26.dp),
+                                colorFilter = ColorFilter.tint(if (expanded == n.key) accent else dim)
+                            )
+                        }
                     }
                 }
-                if (Prefs.showPreview) Column(Modifier.padding(top = 12.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    notifs.take(3).forEach { n ->
+                val shown = if (Prefs.showPreview) notifs.take(3) else notifs.filter { it.key == expanded }
+                Column(Modifier.padding(top = 4.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    shown.forEach { n ->
+                        val open = n.key == expanded
                         val txt = listOf(n.title, n.text).filter { it.isNotBlank() }.joinToString(": ")
                         Text(
-                            "${n.app} · $txt", color = dim.copy(alpha = 0.55f), fontSize = 13.sp,
-                            maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(vertical = 3.dp)
+                            "${n.app} · $txt", color = dim.copy(alpha = if (open) 0.9f else 0.55f), fontSize = if (open) 15.sp else 13.sp,
+                            maxLines = if (open) 12 else 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .tapOrTriple(
+                                    onTap = { expanded = if (open) null else n.key },
+                                    onTriple = { activity?.let { a -> openNotification(a, n) } }
+                                )
+                                .padding(vertical = 6.dp, horizontal = 8.dp)
                         )
                     }
                 }
@@ -258,4 +285,41 @@ private fun Logo(accent: Color) {
             fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 12.dp)
         )
     }
+}
+
+/** Single tap -> onTap; three quick taps -> onTriple. Consumes the taps so the global wake gesture doesn't fire. */
+private fun Modifier.tapOrTriple(onTap: () -> Unit, onTriple: () -> Unit): Modifier = composed {
+    val tap by rememberUpdatedState(onTap)
+    val triple by rememberUpdatedState(onTriple)
+    val times = remember { mutableListOf<Long>() }
+    pointerInput(Unit) {
+        detectTapGestures(onTap = {
+            val t = System.currentTimeMillis()
+            times.removeAll { t - it > 800 }
+            times.add(t)
+            if (times.size >= 3) {
+                times.clear()
+                triple()
+            } else if (times.size == 1) tap()
+        })
+    }
+}
+
+/** Unlock if needed, open the notification's app, and close the AOD. */
+private fun openNotification(activity: Activity, n: NotifItem) {
+    val go = {
+        try {
+            val pi: PendingIntent? = n.intent
+            if (pi != null) pi.send()
+            else activity.packageManager.getLaunchIntentForPackage(n.pkg)?.let { activity.startActivity(it) }
+        } catch (e: Exception) {
+        }
+        activity.finish()
+    }
+    val km = activity.getSystemService(KeyguardManager::class.java)
+    if (km.isKeyguardLocked) {
+        km.requestDismissKeyguard(activity, object : KeyguardManager.KeyguardDismissCallback() {
+            override fun onDismissSucceeded() = go()
+        })
+    } else go()
 }

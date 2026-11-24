@@ -42,7 +42,8 @@ object Prefs {
     var hue by F("hue", 0f)
     var sat by F("sat", 0f)
     var clockScale by F("clockScale", 1f)
-    var brightness by F("brightness", 0.05f)
+    var nightDim by B("nightDim", true)
+    var nightBrightness by F("nightBrightness", 0f)
     var logoMode by I("logoMode", 0) // 0 none, 1 image, 2 text
     var logoText by S("logoText", "")
 
@@ -58,7 +59,7 @@ object Prefs {
 
     // Notifications
     var showNotifs by B("showNotifs", true)
-    var showPreview by B("showPreview", true)
+    var showPreview by B("alwaysPreview", false)
     var edgeLight by B("edgeLight", true)
     var blocked: Set<String>
         get() = sp.getStringSet("blocked", emptySet())!!.toSet()

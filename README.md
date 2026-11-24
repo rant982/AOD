@@ -10,7 +10,7 @@ Personal always-on display for Android (8.0+). Kotlin + Jetpack Compose. Not aff
 
 ## How it works
 A foreground service watches for screen-off and launches a black, dimmed full-screen activity over the lock screen.
-- Triple-tap wakes the phone (to the lock screen).
+- Triple-tap wakes the phone; tap a notification icon to read it, triple-tap it to open the app.
 - Power button turns the screen fully off; it shows the AOD again after the normal screen timeout.
 - Face-down or in a pocket: the display goes solid black.
 
