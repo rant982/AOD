@@ -26,16 +26,23 @@ jobs:
             echo "SIGNING=temporary" >> "$GITHUB_ENV"
             exit 0
           fi
-          # Tolerate stray spaces, quotes, line breaks or extra text around the long line.
+          # Tolerate stray spaces, quotes, line breaks or extra text around the pasted values.
           B64=$(printf '%s' "$KEYSTORE_B64" | tr -d '\r' | grep -oE '[A-Za-z0-9+/=]{200,}' | head -1 || true)
-          PASS=$(printf '%s' "$KEYSTORE_PASSWORD" | tr -d '[:space:]"')
           echo "KEYSTORE_B64 secret: ${#KEYSTORE_B64} characters stored, ${#B64} usable (the long line should be 3396)."
+          echo "KEYSTORE_PASSWORD secret: ${#KEYSTORE_PASSWORD} characters stored (the short line should be 28)."
           if [ -z "$B64" ] || ! printf '%s' "$B64" | base64 -d > "$RUNNER_TEMP/aod.keystore" 2>/dev/null; then
-            echo "::error::KEYSTORE_B64 is not a valid copy of the long line. Re-paste ONLY the single long line under 'Secret 1' (triple-click it in Notepad). It should be 3396 characters."
+            echo "::error::KEYSTORE_B64 is not a valid copy of the long line. Re-paste ONLY the single long line under 'Secret 1'."
             exit 1
           fi
-          if ! keytool -list -keystore "$RUNNER_TEMP/aod.keystore" -storepass "$PASS" > /dev/null 2>&1; then
-            echo "::error::KEYSTORE_PASSWORD does not open the key. Re-paste ONLY the short line under 'Secret 2' (28 characters)."
+          # Try the password as stored, then each separate word in it (in case extra text was pasted too).
+          PASS=""
+          CANDS=$(printf '%s' "$KEYSTORE_PASSWORD" | tr -d '\r"' | tr -s '[:space:]' '\n'; printf '\n'; printf '%s' "$KEYSTORE_PASSWORD" | tr -d '[:space:]"')
+          while IFS= read -r cand; do
+            [ -z "$cand" ] && continue
+            if keytool -list -keystore "$RUNNER_TEMP/aod.keystore" -storepass "$cand" > /dev/null 2>&1; then PASS="$cand"; break; fi
+          done <<< "$CANDS"
+          if [ -z "$PASS" ]; then
+            echo "::error::KEYSTORE_PASSWORD does not open the key. Re-paste ONLY the short line under 'Secret 2' (28 characters). The secret currently holds ${#KEYSTORE_PASSWORD} characters."
             exit 1
           fi
           echo "AOD_KEYSTORE=$RUNNER_TEMP/aod.keystore" >> "$GITHUB_ENV"
