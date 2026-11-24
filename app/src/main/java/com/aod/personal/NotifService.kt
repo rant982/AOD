@@ -2,6 +2,7 @@ package com.aod.personal
 
 import android.app.Notification
 import android.content.ComponentName
+import android.content.Intent
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
@@ -22,8 +23,22 @@ class NotifService : NotificationListenerService() {
         override fun onMetadataChanged(metadata: MediaMetadata?) = updateMedia()
     }
 
+    /** The system keeps this listener alive, so use it as a watchdog: restart the AOD service if it has died. */
+    private fun ensureService() {
+        Prefs.init(this)
+        if (Prefs.enabled && !AodService.running) {
+            try {
+                androidx.core.content.ContextCompat.startForegroundService(
+                    this, Intent(this, AodService::class.java).putExtra("reason", "keeper")
+                )
+            } catch (e: Exception) {
+            }
+        }
+    }
+
     override fun onListenerConnected() {
         Prefs.init(this)
+        ensureService()
         msm = getSystemService(MEDIA_SESSION_SERVICE) as MediaSessionManager
         cn = ComponentName(this, NotifService::class.java)
         refresh(false)
@@ -44,6 +59,7 @@ class NotifService : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        ensureService()
         val n = sbn.notification
         if (sbn.packageName != packageName && n.fullScreenIntent == null &&
             n.category != Notification.CATEGORY_CALL && n.category != Notification.CATEGORY_ALARM

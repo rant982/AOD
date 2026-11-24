@@ -34,6 +34,7 @@ object Prefs {
     }
 
     var enabled by B("enabled", false)
+    var lastStart by S("lastStart", "")
 
     // Appearance
     var clockStyle by I("clockStyle", 0)

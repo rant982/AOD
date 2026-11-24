@@ -90,7 +90,6 @@ class AodService : Service() {
                 if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
             )
             stopForeground(STOP_FOREGROUND_DETACH)
-            Prefs.enabled = false
             AodState.log("Not started. Missing: " + missing.joinToString { it.title })
             stopSelf()
             return START_NOT_STICKY
@@ -105,6 +104,13 @@ class AodService : Service() {
             this, 1, n,
             if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
         )
+        val why = when (intent?.getStringExtra("reason")) {
+            "boot" -> "after restart"
+            "update" -> "after app update"
+            "keeper" -> "restarted by watchdog"
+            else -> "from the app"
+        }
+        Prefs.lastStart = java.text.SimpleDateFormat("EEE d MMM HH:mm", java.util.Locale.getDefault()).format(java.util.Date()) + " ($why)"
         return START_STICKY
     }
 

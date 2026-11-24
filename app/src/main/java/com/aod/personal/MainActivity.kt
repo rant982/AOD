@@ -153,7 +153,18 @@ private fun SettingsScreen() {
                     Text(head, style = MaterialTheme.typography.titleMedium)
                     Text(body, style = MaterialTheme.typography.bodyMedium)
                     Text("Last screen-off: ${AodState.lastEvent}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
-                    OutlinedButton({ tick++ }, Modifier.padding(top = 8.dp)) { Text("Re-run checks") }
+                    Text("Service started: ${Prefs.lastStart.ifEmpty { "not yet" }}", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "After a phone restart, unlock once (Android requires it) and the AOD starts by itself. If it doesn't, allow Auto-launch / background activity for My AOD under App settings > Battery.",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton({ tick++ }) { Text("Re-run checks") }
+                        OutlinedButton({
+                            ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")))
+                        }) { Text("App settings") }
+                    }
                 }
             }
         }
