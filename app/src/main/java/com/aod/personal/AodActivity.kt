@@ -42,7 +42,11 @@ object AodState {
 
     fun log(msg: String) {
         lastEvent = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()) + "  " + msg
+        AodLog.add(msg)
     }
+
+    /** Last pixel-shift move, for the status card. */
+    @Volatile var shiftNote = "not moved yet"
 
     /** True while the PIN/biometric prompt is up, so the lock watchdog stays out of the way. */
     @Volatile var unlocking = false
@@ -100,6 +104,7 @@ class AodActivity : ComponentActivity(), SensorEventListener {
     }
 
     private var notedUnlocked = false
+    private var notedGone = false
 
     /**
      * Safety check, every 2 seconds.
@@ -111,21 +116,29 @@ class AodActivity : ComponentActivity(), SensorEventListener {
         if (AodState.unlocking || preview) return
         if (km.isDeviceLocked) {
             notedUnlocked = false
+            notedGone = false
             return
         }
         if (km.isKeyguardLocked) {
+            notedGone = false
             if (!notedUnlocked) {
                 notedUnlocked = true
                 AodState.log("Phone unlocked (face or trust) while the AOD was showing; AOD left in place.")
             }
             return
         }
-        AodState.log("AOD closed: the lock screen was gone (phone already unlocked).")
-        finish()
+        // Lock screen gone altogether (face/trust unlocked straight to the home screen). Never throw the user
+        // onto the home screen from here. Leaving the AOD now asks for face, fingerprint or PIN first.
+        if (!notedGone) {
+            notedGone = true
+            AodState.log("Lock screen was gone (unlocked straight to home) while the AOD showed; AOD kept in front. Leaving it now asks for face, fingerprint or PIN.")
+        }
     }
 
     private fun updateCovered() {
-        covered = Prefs.hideCovered && ((hasProx && !proxSeen) || near || down)
+        val c = Prefs.hideCovered && ((hasProx && !proxSeen) || near || down)
+        if (c != covered) AodLog.add("covered=$c near=$near faceDown=$down proxSeen=$proxSeen")
+        covered = c
     }
 
     private fun isDnd(): Boolean {
@@ -143,6 +156,7 @@ class AodActivity : ComponentActivity(), SensorEventListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Prefs.init(this)
+        AodLog.add("AOD created preview=$preview")
         setShowWhenLocked(true)
         setTurnScreenOn(true)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -169,6 +183,7 @@ class AodActivity : ComponentActivity(), SensorEventListener {
     override fun onResume() {
         super.onResume()
         AodState.unlocking = false
+        AodLog.add("AOD resumed deviceLocked=${km.isDeviceLocked} keyguard=${km.isKeyguardLocked}")
         handler.removeCallbacks(relaunch)
         if (!preview) handler.post(guard)
         if (Prefs.hideCovered) {
@@ -179,12 +194,24 @@ class AodActivity : ComponentActivity(), SensorEventListener {
 
     override fun onPause() {
         super.onPause()
+        AodLog.add("AOD paused finishing=$isFinishing deviceLocked=${km.isDeviceLocked} keyguard=${km.isKeyguardLocked}")
         handler.removeCallbacks(guard)
         if (!isFinishing) handler.postDelayed(relaunch, 400)
         sm.unregisterListener(this)
     }
 
+    override fun onStop() {
+        AodLog.add("AOD stopped finishing=$isFinishing")
+        super.onStop()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        AodLog.add("AOD window focus=$hasFocus")
+    }
+
     override fun onDestroy() {
+        AodLog.add("AOD destroyed finishing=$isFinishing")
         unregisterReceiver(dndReceiver)
         handler.removeCallbacksAndMessages(null)
         if (AodState.activity?.get() === this) AodState.activity = null

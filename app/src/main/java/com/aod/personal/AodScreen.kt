@@ -1,6 +1,9 @@
 package com.aod.personal
 
 import android.app.Activity
+import android.hardware.biometrics.BiometricManager
+import android.hardware.biometrics.BiometricPrompt
+import android.os.CancellationSignal
 import android.app.ActivityOptions
 import android.os.Build
 import android.app.KeyguardManager
@@ -17,6 +20,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.mutableFloatStateOf
@@ -147,15 +153,25 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
         }
     }
 
-    // Pixel shift
+    // Pixel shift (burn-in protection): jump to a new random spot as soon as the AOD appears, then every 45 seconds.
+    val density = LocalDensity.current
     var shift by remember { mutableStateOf(IntOffset.Zero) }
     LaunchedEffect(Unit) {
-        while (Prefs.pixelShift) {
-            delay(60_000)
-            shift = IntOffset(Random.nextInt(-30, 31), Random.nextInt(-60, 61))
+        if (!Prefs.pixelShift) return@LaunchedEffect
+        val (hx, vy) = when (Prefs.shiftAmount) {
+            0 -> 12 to 24
+            2 -> 40 to 80
+            else -> 24 to 48
+        }
+        while (true) {
+            val dx = with(density) { Random.nextInt(-hx, hx + 1).dp.roundToPx() }
+            val dy = with(density) { Random.nextInt(-vy, vy + 1).dp.roundToPx() }
+            shift = IntOffset(dx, dy)
+            AodState.shiftNote = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()) + "  moved to ($dx, $dy) px"
+            delay(45_000)
         }
     }
-    val shiftAnim by animateIntOffsetAsState(shift, tween(3000), label = "shift")
+    val shiftAnim by animateIntOffsetAsState(shift, tween(2500), label = "shift")
 
     val activity = ctx as? Activity
     var expanded by remember { mutableStateOf<String?>(null) }
@@ -190,7 +206,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                 .padding(24.dp)
                 .offset { shiftAnim },
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.spacedBy(Prefs.blockGap.dp, Alignment.CenterVertically)
         ) {
             val order = remember { Prefs.orderList() }
             val h = SimpleDateFormat(if (Prefs.use24h) "HH" else "h", Locale.getDefault()).format(Date(now))
@@ -295,6 +311,18 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                         )
                                         .padding(vertical = 6.dp, horizontal = 8.dp)
                                 )
+                                if (open) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    HideChip("Never this app", dim) {
+                                        Prefs.blocked = Prefs.blocked + n.pkg
+                                        NotifService.refreshNow()
+                                        expanded = null
+                                    }
+                                    HideChip("Never this notification", dim) {
+                                        Prefs.muted = Prefs.muted + "${n.pkg}|${n.title}"
+                                        NotifService.refreshNow()
+                                        expanded = null
+                                    }
+                                }
                             }
                         }
                     }
@@ -306,7 +334,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
 
 @Composable
 private fun Line(text: String, color: Color, size: Int) {
-    Text(text, color = color, fontSize = size.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+    Text(text, color = color, fontSize = size.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier)
 }
 
 @Composable
@@ -350,13 +378,21 @@ private fun Modifier.tapOrTriple(onTap: () -> Unit, onTriple: () -> Unit): Modif
  */
 private fun openNotification(activity: Activity, n: NotifItem) {
     val km = activity.getSystemService(KeyguardManager::class.java)
-    if (km.isKeyguardLocked) {
-        AodState.pendingOpen = n
-        AodState.pendingAt = System.currentTimeMillis()
-    } else {
-        openNotificationNow(activity, n)
+    when {
+        activity.intent.getBooleanExtra("preview", false) -> {
+            openNotificationNow(activity, n)
+            activity.finish()
+        }
+        km.isKeyguardLocked -> {
+            AodState.pendingOpen = n
+            AodState.pendingAt = System.currentTimeMillis()
+            activity.finish()
+        }
+        else -> authenticateThen(activity) {
+            openNotificationNow(activity, n)
+            activity.finish()
+        }
     }
-    activity.finish()
 }
 
 fun openNotificationNow(ctx: Context, n: NotifItem) {
@@ -379,7 +415,56 @@ fun openNotificationNow(ctx: Context, n: NotifItem) {
  * Triple-tap anywhere else: close the AOD so the real lock screen shows. While the AOD covers the lock screen
  * Android doesn't listen for face or fingerprint; once it's gone, both work as normal, with PIN only as a fallback.
  */
-fun unlock(activity: Activity) = activity.finish()
+fun unlock(activity: Activity) {
+    val km = activity.getSystemService(KeyguardManager::class.java)
+    if (km.isKeyguardLocked || activity.intent.getBooleanExtra("preview", false)) activity.finish()
+    else authenticateThen(activity) { activity.finish() }
+}
+
+/**
+ * The lock screen is already gone (for example face unlock went straight to the home screen), so ask for face,
+ * fingerprint or PIN before letting anyone out of the AOD.
+ */
+fun authenticateThen(activity: Activity, after: () -> Unit) {
+    if (Build.VERSION.SDK_INT < 30) {
+        after()
+        return
+    }
+    AodState.unlocking = true
+    try {
+        BiometricPrompt.Builder(activity)
+            .setTitle("Unlock")
+            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_WEAK or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
+            .build()
+            .authenticate(CancellationSignal(), activity.mainExecutor, object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult?) {
+                    AodState.unlocking = false
+                    AodLog.add("Unlock check passed")
+                    after()
+                }
+
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) {
+                    AodState.unlocking = false
+                    AodLog.add("Unlock check cancelled/failed ($errorCode)")
+                }
+            })
+    } catch (e: Exception) {
+        AodState.unlocking = false
+        AodLog.add("Unlock check could not start: ${e.message}")
+    }
+}
+
+@Composable
+private fun HideChip(label: String, color: Color, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .border(1.dp, color.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Text("✕ $label", color = color.copy(alpha = 0.8f), fontSize = 12.sp)
+    }
+}
 
 fun appVersion(c: Context): String =
     try {

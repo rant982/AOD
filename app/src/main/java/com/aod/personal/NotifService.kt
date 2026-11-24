@@ -17,6 +17,11 @@ class NotifService : NotificationListenerService() {
         @Volatile private var instance: NotifService? = null
 
         /** Clears a notification from the phone (same as swiping it away in the shade). */
+        /** Re-applies the hide rules straight away. */
+        fun refreshNow() {
+            instance?.refresh(false)
+        }
+
         fun dismiss(key: String) {
             try {
                 instance?.cancelNotification(key)
@@ -75,6 +80,7 @@ class NotifService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         ensureService()
         val n = sbn.notification
+        AodLog.add("notification posted pkg=${sbn.packageName} category=${n.category}")
         if (sbn.packageName != packageName && n.fullScreenIntent == null &&
             n.category != Notification.CATEGORY_CALL && n.category != Notification.CATEGORY_ALARM
         ) AodState.lastNotifAt = System.currentTimeMillis()
@@ -82,9 +88,10 @@ class NotifService : NotificationListenerService() {
     }
     override fun onNotificationRemoved(sbn: StatusBarNotification) = refresh(false)
 
-    private fun refresh(emit: Boolean) {
+    fun refresh(emit: Boolean) {
         Prefs.init(this)
         val blocked = Prefs.blocked
+        val muted = Prefs.muted
         val old = NotifRepo.items.value
         val list = try {
             activeNotifications.orEmpty()
@@ -94,6 +101,7 @@ class NotifService : NotificationListenerService() {
             val n = sbn.notification
             sbn.packageName != packageName &&
                 sbn.packageName !in blocked &&
+                "${sbn.packageName}|${n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()}" !in muted &&
                 n.flags and Notification.FLAG_GROUP_SUMMARY == 0 &&
                 n.flags and Notification.FLAG_ONGOING_EVENT == 0 &&
                 n.category != Notification.CATEGORY_TRANSPORT

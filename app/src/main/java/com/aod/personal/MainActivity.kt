@@ -154,6 +154,7 @@ private fun SettingsScreen() {
                     Text(body, style = MaterialTheme.typography.bodyMedium)
                     Text("Last screen-off: ${AodState.lastEvent}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
                     Text("Service started: ${Prefs.lastStart.ifEmpty { "not yet" }}", style = MaterialTheme.typography.bodySmall)
+                    Text("Pixel shift: ${AodState.shiftNote}", style = MaterialTheme.typography.bodySmall)
                     Text(
                         "After a phone restart, unlock once (Android requires it) and the AOD starts by itself. If it doesn't, allow Auto-launch / background activity for My AOD under App settings > Battery.",
                         style = MaterialTheme.typography.bodySmall,
@@ -238,6 +239,7 @@ private fun SettingsScreen() {
         item { SliderRow("Colour", Prefs.hue, 0f..360f) { Prefs.hue = it } }
         item { SliderRow("Colour saturation (left = white)", Prefs.sat, 0f..1f) { Prefs.sat = it } }
         item { SliderRow("Clock size", Prefs.clockScale, 0.6f..1.4f) { Prefs.clockScale = it } }
+        item { SliderRow("Spacing between items", Prefs.blockGap, 0f..60f) { Prefs.blockGap = it } }
         item { Text("Daytime brightness follows your phone's brightness setting (including automatic).", style = MaterialTheme.typography.bodySmall) }
         item { SwitchRow("Dim at night when Do Not Disturb is on", Prefs.nightDim) { Prefs.nightDim = it } }
         item { SliderRow("Night brightness (left = lowest)", Prefs.nightBrightness, 0f..0.2f) { Prefs.nightBrightness = it } }
@@ -284,12 +286,55 @@ private fun SettingsScreen() {
         item { SwitchRow("Always show notification text (off = tap an icon to read it)", Prefs.showPreview) { Prefs.showPreview = it } }
         item { SwitchRow("Edge lighting on new notification", Prefs.edgeLight) { Prefs.edgeLight = it } }
         item { OutlinedButton({ showBlocked = true }) { Text("Choose apps to hide (${Prefs.blocked.size} hidden)") } }
+        item { Text("Tip: tap an icon on the AOD, then 'Never this app' or 'Never this notification'.", style = MaterialTheme.typography.bodySmall) }
+        item {
+            OutlinedButton({
+                Prefs.muted = emptySet()
+                NotifService.refreshNow()
+                tick++
+            }) { Text("Un-hide muted notifications (${Prefs.muted.size})") }
+        }
 
         item { Header("Behaviour") }
         item { SwitchRow("Pixel shift (burn-in protection)", Prefs.pixelShift) { Prefs.pixelShift = it } }
+        item {
+            var amount by remember { mutableIntStateOf(Prefs.shiftAmount) }
+            Chips("Pixel shift distance", listOf("Small", "Medium", "Large"), amount) { amount = it; Prefs.shiftAmount = it }
+        }
         item { SwitchRow("Go black when face-down or in pocket", Prefs.hideCovered) { Prefs.hideCovered = it } }
         item { SwitchRow("Power button turns the screen fully off (otherwise the AOD comes straight back)", Prefs.powerOff) { Prefs.powerOff = it } }
         item { Text("Tap an icon (e.g. WhatsApp) to show its text. Triple-tap that text to open the message, or swipe it sideways to clear it. Triple-tap the clock to reach the lock screen. Taps anywhere else do nothing, so the pocket is safe.", style = MaterialTheme.typography.bodySmall) }
+
+        item { Header("Diagnostics") }
+        item {
+            val logText = remember(tick) { AodLog.read().lines().takeLast(12).joinToString("\n") }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "If the AOD ever switches to the lock or home screen by itself, tap Copy event log straight afterwards and paste it to Claude. It holds app names and lock states only, never notification text.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button({
+                        val cm = ctx.getSystemService(android.content.ClipboardManager::class.java)
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("AOD event log", AodLog.read()))
+                        android.widget.Toast.makeText(ctx, "Event log copied", android.widget.Toast.LENGTH_SHORT).show()
+                    }) { Text("Copy event log") }
+                    OutlinedButton({
+                        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, AodLog.read())
+                        ctx.startActivity(Intent.createChooser(send, "Share event log"))
+                    }) { Text("Share") }
+                    OutlinedButton({
+                        AodLog.clear()
+                        tick++
+                    }) { Text("Clear") }
+                }
+                Text(
+                    logText.ifBlank { "(no events yet)" },
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                )
+            }
+        }
     }
 
     if (showBlocked) BlockedAppsDialog { showBlocked = false }

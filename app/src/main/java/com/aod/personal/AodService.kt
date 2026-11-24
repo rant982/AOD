@@ -32,7 +32,14 @@ class AodService : Service() {
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
+            val kmx = getSystemService(KeyguardManager::class.java)
+            val state = "showing=${AodState.showing} deviceLocked=${kmx.isDeviceLocked} keyguard=${kmx.isKeyguardLocked}"
+            if (i.action == Intent.ACTION_SCREEN_ON) {
+                AodLog.add("SCREEN_ON $state")
+                return
+            }
             if (i.action != Intent.ACTION_SCREEN_OFF) return
+            AodLog.add("SCREEN_OFF $state")
             AodState.pendingOpen = null // never open a stale message after the screen has gone off
             if (System.currentTimeMillis() - AodState.lastLaunch < 1500) return
             val missing = Requirements.missingRequired(this@AodService)
@@ -56,6 +63,7 @@ class AodService : Service() {
 
     private val unlockReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
+            AodLog.add("USER_PRESENT (phone unlocked)")
             val n = AodState.pendingOpen ?: return
             AodState.pendingOpen = null
             if (System.currentTimeMillis() - AodState.pendingAt < 60_000) openNotificationNow(this@AodService, n)
@@ -66,7 +74,10 @@ class AodService : Service() {
         super.onCreate()
         Prefs.init(this)
         running = true
-        registerReceiver(screenReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
+        registerReceiver(screenReceiver, IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+        })
         registerReceiver(unlockReceiver, IntentFilter(Intent.ACTION_USER_PRESENT))
     }
 
@@ -111,6 +122,7 @@ class AodService : Service() {
             else -> "from the app"
         }
         Prefs.lastStart = java.text.SimpleDateFormat("EEE d MMM HH:mm", java.util.Locale.getDefault()).format(java.util.Date()) + " ($why)"
+        AodLog.add("service started $why")
         return START_STICKY
     }
 
