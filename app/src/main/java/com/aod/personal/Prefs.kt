@@ -33,6 +33,16 @@ object Prefs {
         override fun setValue(thisRef: Any?, property: KProperty<*>, value: String) = sp.edit().putString(k, value).apply()
     }
 
+    val ALL_BLOCKS = listOf("LOGO", "CLOCK", "DATE", "BATTERY", "WEATHER", "CALENDAR", "MUSIC", "NOTIFS")
+
+    /** Top-to-bottom order of everything on the AOD. Unknown entries are dropped and missing ones appended. */
+    var order by S("order", ALL_BLOCKS.joinToString(","))
+
+    fun orderList(): List<String> {
+        val saved = order.split(",").filter { it in ALL_BLOCKS }.distinct()
+        return saved + ALL_BLOCKS.filter { it !in saved }
+    }
+
     var enabled by B("enabled", false)
     var lastStart by S("lastStart", "")
 

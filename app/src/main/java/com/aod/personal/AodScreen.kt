@@ -184,84 +184,106 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Logo(accent)
-
+            val order = remember { Prefs.orderList() }
             val h = SimpleDateFormat(if (Prefs.use24h) "HH" else "h", Locale.getDefault()).format(Date(now))
             val m = SimpleDateFormat("mm", Locale.getDefault()).format(Date(now))
-            // Triple-tap the clock to reach the lock screen. Nothing else on the screen unlocks.
-            Box(Modifier.tapOrTriple(onTap = {}, onTriple = onWake).padding(8.dp)) {
-            when (Prefs.clockStyle) {
-                0 -> Text("$h:$m", color = accent, fontFamily = family, fontWeight = FontWeight.Light, fontSize = (88 * scale).sp)
-                1 -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(h, color = accent, fontFamily = family, fontWeight = FontWeight.Bold, fontSize = (110 * scale).sp, lineHeight = (100 * scale).sp)
-                    Text(m, color = dim, fontFamily = family, fontWeight = FontWeight.Light, fontSize = (110 * scale).sp, lineHeight = (100 * scale).sp)
-                }
-                else -> Text(
-                    buildAnnotatedString {
-                        withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = accent)) { append(h) }
-                        withStyle(SpanStyle(fontWeight = FontWeight.Light, color = dim)) { append(":$m") }
-                    },
-                    fontFamily = family, fontSize = (88 * scale).sp
-                )
-            }
+            val batteryText = if (Prefs.showBattery && battery.first >= 0) (if (battery.second) "⚡" else "🔋") + " ${battery.first}%" else null
+            val weatherText = weather?.takeIf { Prefs.showWeather }?.let {
+                val t = if (Prefs.fahrenheit) "${Math.round(it.tempC * 9f / 5f + 32)}°F" else "${Math.round(it.tempC)}°C"
+                "${WeatherRepo.emoji(it.code)} $t"
             }
 
-            if (Prefs.showDate) {
-                val pattern = DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEMMMMd")
-                Line(SimpleDateFormat(pattern, Locale.getDefault()).format(Date(now)), dim, 18)
-            }
+            // Blocks are drawn in the order chosen in Settings.
+            order.forEachIndexed { idx, key ->
+                when (key) {
+                    "LOGO" -> Logo(accent)
 
-            val bits = buildList {
-                if (Prefs.showBattery && battery.first >= 0) add((if (battery.second) "⚡" else "🔋") + " ${battery.first}%")
-                weather?.takeIf { Prefs.showWeather }?.let {
-                    val t = if (Prefs.fahrenheit) "${Math.round(it.tempC * 9f / 5f + 32)}°F" else "${Math.round(it.tempC)}°C"
-                    add("${WeatherRepo.emoji(it.code)} $t")
-                }
-            }
-            if (bits.isNotEmpty()) Line(bits.joinToString("   "), dim, 16)
-
-            event?.takeIf { Prefs.showCalendar }?.let {
-                val time = if (it.begin <= now) "Now" else SimpleDateFormat(if (Prefs.use24h) "HH:mm" else "h:mm a", Locale.getDefault()).format(Date(it.begin))
-                Line("📅 $time  ${it.title}", dim, 14)
-            }
-
-            media?.takeIf { Prefs.showMusic }?.let {
-                Line("♪ ${it.title}" + if (it.artist.isNotBlank()) " – ${it.artist}" else "", dim, 14)
-            }
-
-            if (Prefs.showNotifs && notifs.isNotEmpty()) {
-                Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    notifs.distinctBy { it.pkg }.take(8).forEach { n ->
-                        n.icon?.let {
-                            Image(
-                                it.asImageBitmap(), null,
-                                Modifier
-                                    .tapOrTriple(
-                                        onTap = { expanded = if (expanded == n.key) null else n.key },
-                                        onTriple = {} // icons only show the text; they never unlock
-                                    )
-                                    .padding(10.dp)
-                                    .size(26.dp),
-                                colorFilter = ColorFilter.tint(if (expanded == n.key) accent else dim)
-                            )
+                    "CLOCK" -> {
+                        // Triple-tap the clock to reach the lock screen. Nothing else on the screen unlocks.
+                        Box(Modifier.tapOrTriple(onTap = {}, onTriple = onWake).padding(8.dp)) {
+                            when (Prefs.clockStyle) {
+                                0 -> Text("$h:$m", color = accent, fontFamily = family, fontWeight = FontWeight.Light, fontSize = (88 * scale).sp)
+                                1 -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(h, color = accent, fontFamily = family, fontWeight = FontWeight.Bold, fontSize = (110 * scale).sp, lineHeight = (100 * scale).sp)
+                                    Text(m, color = dim, fontFamily = family, fontWeight = FontWeight.Light, fontSize = (110 * scale).sp, lineHeight = (100 * scale).sp)
+                                }
+                                else -> Text(
+                                    buildAnnotatedString {
+                                        withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = accent)) { append(h) }
+                                        withStyle(SpanStyle(fontWeight = FontWeight.Light, color = dim)) { append(":$m") }
+                                    },
+                                    fontFamily = family, fontSize = (88 * scale).sp
+                                )
+                            }
                         }
                     }
-                }
-                val shown = if (Prefs.showPreview) notifs.take(3) else notifs.filter { it.key == expanded }
-                Column(Modifier.padding(top = 4.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    shown.forEach { n ->
-                        val open = n.key == expanded
-                        val txt = listOf(n.title, n.text).filter { it.isNotBlank() }.joinToString(": ")
-                        Text(
-                            "${n.app} · $txt", color = dim.copy(alpha = if (open) 0.9f else 0.55f), fontSize = if (open) 15.sp else 13.sp,
-                            maxLines = if (open) 12 else 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .tapOrTriple(
-                                    onTap = { expanded = n.key },
-                                    onTriple = { activity?.let { a -> openNotification(a, n) } }
+
+                    "DATE" -> if (Prefs.showDate) {
+                        val pattern = DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEMMMMd")
+                        Line(SimpleDateFormat(pattern, Locale.getDefault()).format(Date(now)), dim, 18)
+                    }
+
+                    // Battery and weather share one line when they sit next to each other in the order.
+                    "BATTERY", "WEATHER" -> {
+                        val prev = order.getOrNull(idx - 1)
+                        val next = order.getOrNull(idx + 1)
+                        val prevIsPair = prev == "BATTERY" || prev == "WEATHER"
+                        if (!prevIsPair) {
+                            val first = if (key == "BATTERY") batteryText else weatherText
+                            val second = when (next) {
+                                "BATTERY" -> batteryText
+                                "WEATHER" -> weatherText
+                                else -> null
+                            }
+                            val line = listOfNotNull(first, second).joinToString("   ")
+                            if (line.isNotEmpty()) Line(line, dim, 16)
+                        }
+                    }
+
+                    "CALENDAR" -> event?.takeIf { Prefs.showCalendar }?.let {
+                        val time = if (it.begin <= now) "Now" else SimpleDateFormat(if (Prefs.use24h) "HH:mm" else "h:mm a", Locale.getDefault()).format(Date(it.begin))
+                        Line("📅 $time  ${it.title}", dim, 14)
+                    }
+
+                    "MUSIC" -> media?.takeIf { Prefs.showMusic }?.let {
+                        Line("♪ ${it.title}" + if (it.artist.isNotBlank()) " – ${it.artist}" else "", dim, 14)
+                    }
+
+                    "NOTIFS" -> if (Prefs.showNotifs && notifs.isNotEmpty()) {
+                        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            notifs.distinctBy { it.pkg }.take(8).forEach { n ->
+                                n.icon?.let {
+                                    Image(
+                                        it.asImageBitmap(), null,
+                                        Modifier
+                                            .tapOrTriple(
+                                                onTap = { expanded = if (expanded == n.key) null else n.key },
+                                                onTriple = {} // icons only show the text; they never unlock
+                                            )
+                                            .padding(10.dp)
+                                            .size(26.dp),
+                                        colorFilter = ColorFilter.tint(if (expanded == n.key) accent else dim)
+                                    )
+                                }
+                            }
+                        }
+                        val shown = if (Prefs.showPreview) notifs.take(3) else notifs.filter { it.key == expanded }
+                        Column(Modifier.padding(top = 4.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                            shown.forEach { n ->
+                                val open = n.key == expanded
+                                val txt = listOf(n.title, n.text).filter { it.isNotBlank() }.joinToString(": ")
+                                Text(
+                                    "${n.app} · $txt", color = dim.copy(alpha = if (open) 0.9f else 0.55f), fontSize = if (open) 15.sp else 13.sp,
+                                    maxLines = if (open) 12 else 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                                    modifier = Modifier
+                                        .tapOrTriple(
+                                            onTap = { expanded = n.key },
+                                            onTriple = { activity?.let { a -> openNotification(a, n) } }
+                                        )
+                                        .padding(vertical = 6.dp, horizontal = 8.dp)
                                 )
-                                .padding(vertical = 6.dp, horizontal = 8.dp)
-                        )
+                            }
+                        }
                     }
                 }
             }

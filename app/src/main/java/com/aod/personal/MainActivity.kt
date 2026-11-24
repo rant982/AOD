@@ -242,6 +242,9 @@ private fun SettingsScreen() {
         item { SwitchRow("Dim at night when Do Not Disturb is on", Prefs.nightDim) { Prefs.nightDim = it } }
         item { SliderRow("Night brightness (left = lowest)", Prefs.nightBrightness, 0f..0.2f) { Prefs.nightBrightness = it } }
 
+        item { Header("Screen order (top to bottom)") }
+        item { OrderEditor() }
+
         item { Header("Logo") }
         item {
             var mode by remember(tick) { mutableIntStateOf(Prefs.logoMode) }
@@ -358,5 +361,37 @@ private fun Chips(label: String, options: List<String>, selected: Int, onSelect:
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             options.forEachIndexed { i, o -> FilterChip(selected == i, { onSelect(i) }, { Text(o) }) }
         }
+    }
+}
+
+
+private fun blockLabel(key: String) = when (key) {
+    "LOGO" -> "Logo"
+    "CLOCK" -> "Time"
+    "DATE" -> "Date"
+    "BATTERY" -> "Battery"
+    "WEATHER" -> "Weather"
+    "CALENDAR" -> "Next calendar event"
+    "MUSIC" -> "Music"
+    else -> "Notifications (icons and text)"
+}
+
+@Composable
+private fun OrderEditor() {
+    var order by remember { mutableStateOf(Prefs.orderList()) }
+    fun save(l: List<String>) {
+        order = l
+        Prefs.order = l.joinToString(",")
+    }
+    Column {
+        Text("Use the arrows to move items. Items you've switched off don't show. Battery and weather share a line when they're next to each other.", style = MaterialTheme.typography.bodySmall)
+        order.forEachIndexed { i, key ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("${i + 1}.  ${blockLabel(key)}", Modifier.weight(1f))
+                TextButton({ save(order.toMutableList().also { java.util.Collections.swap(it, i, i - 1) }) }, enabled = i > 0) { Text("▲") }
+                TextButton({ save(order.toMutableList().also { java.util.Collections.swap(it, i, i + 1) }) }, enabled = i < order.size - 1) { Text("▼") }
+            }
+        }
+        OutlinedButton({ save(Prefs.ALL_BLOCKS) }) { Text("Reset order") }
     }
 }
