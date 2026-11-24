@@ -57,7 +57,7 @@ object Requirements {
         l += Check(
             "Phone locks as soon as the screen turns off",
             "Do ONE of these (neither stops face or fingerprint unlock):\n" +
-                "1) Tap 'Lock helper', open My AOD and switch it on. If the switch is greyed out: Settings > Apps > My AOD > the three dots > Allow restricted settings, then try again.\n" +
+                "1) Tap 'Lock helper', scroll down to 'My AOD Lock Helper' under Downloaded services and switch it on. If the switch is greyed out: Settings > Apps > My AOD > the three dots > Allow restricted settings, then try again.\n" +
                 "2) Or tap 'Auto-lock setting' and set 'Automatically lock' to Immediately.",
             helper || lockAfter <= 1000L, 0,
             Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS),
