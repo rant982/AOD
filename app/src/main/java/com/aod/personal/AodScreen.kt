@@ -49,7 +49,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -257,7 +260,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                     "NOTIFS" -> if (Prefs.showNotifs && notifs.isNotEmpty()) {
                         Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             notifs.distinctBy { it.pkg }.take(8).forEach { n ->
-                                n.icon?.let {
+                                (if (Prefs.iconStyle == 2) (n.appIcon ?: n.icon) else n.icon)?.let {
                                     Image(
                                         it.asImageBitmap(), null,
                                         Modifier
@@ -265,9 +268,10 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                                 onTap = { expanded = if (expanded == n.key) null else n.key },
                                                 onTriple = {} // icons only show the text; they never unlock
                                             )
+                                            .alpha(if (Prefs.iconStyle != 0 && expanded != n.key) 0.8f else 1f)
                                             .padding(10.dp)
                                             .size(26.dp),
-                                        colorFilter = ColorFilter.tint(if (expanded == n.key) accent else dim)
+                                        colorFilter = iconTint(n, expanded == n.key, accent, dim)
                                     )
                                 }
                             }
@@ -401,4 +405,14 @@ private fun Modifier.swipeAway(onDismiss: () -> Unit): Modifier = composed {
                 onHorizontalDrag = { _, d -> dx += d }
             )
         }
+}
+
+/** Mono: tinted to the AOD colour. Brand colour: the app's own accent colour (lightened if too dark). App icon: untouched. */
+private fun iconTint(n: NotifItem, selected: Boolean, accent: Color, dim: Color): ColorFilter? = when (Prefs.iconStyle) {
+    1 -> {
+        val base = if (n.color != 0) Color(n.color or 0xFF000000.toInt()) else accent
+        ColorFilter.tint(if (base.luminance() < 0.3f) lerp(base, Color.White, 0.5f) else base)
+    }
+    2 -> if (n.appIcon != null) null else ColorFilter.tint(if (selected) accent else dim)
+    else -> ColorFilter.tint(if (selected) accent else dim)
 }

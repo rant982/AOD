@@ -14,7 +14,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-data class NotifItem(val key: String, val pkg: String, val app: String, val title: String, val text: String, val icon: Bitmap?, val intent: PendingIntent?)
+data class NotifItem(val key: String, val pkg: String, val app: String, val title: String, val text: String, val icon: Bitmap?, val intent: PendingIntent?, val color: Int = 0, val appIcon: Bitmap? = null)
 data class MediaInfo(val title: String, val artist: String)
 data class Weather(val tempC: Float, val code: Int)
 data class CalEvent(val title: String, val begin: Long, val end: Long)

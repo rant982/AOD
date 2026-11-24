@@ -110,6 +110,12 @@ class NotifService : NotificationListenerService() {
                 title = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty(),
                 text = (ex.getCharSequence(Notification.EXTRA_TEXT) ?: ex.getCharSequence(Notification.EXTRA_BIG_TEXT))?.toString().orEmpty(),
                 intent = sbn.notification.contentIntent,
+                color = sbn.notification.color,
+                appIcon = try {
+                    packageManager.getApplicationIcon(sbn.packageName).toBitmap(64, 64)
+                } catch (e: Exception) {
+                    null
+                },
                 icon = try {
                     sbn.notification.smallIcon?.loadDrawable(this)?.toBitmap(64, 64)
                 } catch (e: Exception) {

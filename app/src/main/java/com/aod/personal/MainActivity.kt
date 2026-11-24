@@ -277,6 +277,10 @@ private fun SettingsScreen() {
 
         item { Header("Notifications") }
         item { SwitchRow("Notification icons", Prefs.showNotifs) { Prefs.showNotifs = it } }
+        item {
+            var iconStyle by remember { mutableIntStateOf(Prefs.iconStyle) }
+            Chips("Icon style", listOf("Mono", "Brand colour", "App icon"), iconStyle) { iconStyle = it; Prefs.iconStyle = it }
+        }
         item { SwitchRow("Always show notification text (off = tap an icon to read it)", Prefs.showPreview) { Prefs.showPreview = it } }
         item { SwitchRow("Edge lighting on new notification", Prefs.edgeLight) { Prefs.edgeLight = it } }
         item { OutlinedButton({ showBlocked = true }) { Text("Choose apps to hide (${Prefs.blocked.size} hidden)") } }

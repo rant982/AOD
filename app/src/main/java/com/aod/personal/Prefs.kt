@@ -70,6 +70,7 @@ object Prefs {
 
     // Notifications
     var showNotifs by B("showNotifs", true)
+    var iconStyle by I("iconStyle", 0) // 0 mono, 1 brand colour, 2 app icon
     var showPreview by B("alwaysPreview", false)
     var edgeLight by B("edgeLight", true)
     var blocked: Set<String>
