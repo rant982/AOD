@@ -15,6 +15,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -67,7 +68,17 @@ class MainActivity : ComponentActivity() {
         Prefs.init(this)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
-                Surface(Modifier.fillMaxSize()) { SettingsScreen() }
+                Surface(Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxSize()) {
+                        SettingsScreen()
+                        Text(
+                            "v${appVersion(this@MainActivity)}",
+                            Modifier.align(Alignment.TopEnd).padding(16.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             }
         }
     }
@@ -128,7 +139,6 @@ private fun SettingsScreen() {
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("My AOD", style = MaterialTheme.typography.headlineMedium)
-                Text("v${appVersion(ctx)}", style = MaterialTheme.typography.bodySmall)
             }
         }
         item {
