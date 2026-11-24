@@ -23,6 +23,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
@@ -102,24 +105,46 @@ private fun SettingsScreen() {
         }
     }
 
-    val listener = remember(tick) { NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName) }
-    val overlay = remember(tick) { Settings.canDrawOverlays(ctx) }
-    val postNotif = remember(tick) { Build.VERSION.SDK_INT < 33 || hasPerm(ctx, Manifest.permission.POST_NOTIFICATIONS) }
-    val calendar = remember(tick) { hasPerm(ctx, Manifest.permission.READ_CALENDAR) }
-    val adminComp = remember { android.content.ComponentName(ctx, AdminReceiver::class.java) }
-    val admin = remember(tick) { ctx.getSystemService(android.app.admin.DevicePolicyManager::class.java).isAdminActive(adminComp) }
-    val secure = remember(tick) { ctx.getSystemService(android.app.KeyguardManager::class.java).isDeviceSecure }
-    val location = remember(tick) { hasPerm(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) }
-    val ignoringBattery = remember(tick) { (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(ctx.packageName) }
+    val checks = remember(tick) { Requirements.checks(ctx) }
+    val missing = checks.filter { it.required && !it.ok }
+    val ready = missing.isEmpty()
+    val running = remember(tick) { AodService.running }
 
     var enabled by remember { mutableStateOf(Prefs.enabled) }
     var showBlocked by remember { mutableStateOf(false) }
+
+    // Never leave the AOD switched on if setup has broken (e.g. device admin revoked).
+    LaunchedEffect(tick) {
+        if (Prefs.enabled && !ready) {
+            Prefs.enabled = false
+            enabled = false
+            ctx.stopService(Intent(ctx, AodService::class.java))
+        } else if (Prefs.enabled && ready && !AodService.running) {
+            ContextCompat.startForegroundService(ctx, Intent(ctx, AodService::class.java))
+        }
+    }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("My AOD", style = MaterialTheme.typography.headlineMedium)
                 Text("v${appVersion(ctx)}", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        item {
+            val (bg, head, body) = when {
+                !ready -> Triple(Color(0xFF5C1A1A), "⛔ AOD can't run yet", "Fix the ${missing.size} required item${if (missing.size == 1) "" else "s"} below. Until then it stays switched off.")
+                !enabled -> Triple(Color(0xFF1F3D2B), "✅ All required checks passed", "Turn on \"Enable always-on display\" below.")
+                running -> Triple(Color(0xFF1F3D2B), "✅ AOD is running", "Switch the screen off and it should appear. Use the lock test below to confirm.")
+                else -> Triple(Color(0xFF5A4A16), "⚠️ Enabled, but the service isn't running", "Switch Enable off and on again.")
+            }
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = bg)) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(head, style = MaterialTheme.typography.titleMedium)
+                    Text(body, style = MaterialTheme.typography.bodyMedium)
+                    Text("Last screen-off: ${AodState.lastEvent}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                    OutlinedButton({ tick++ }, Modifier.padding(top = 8.dp)) { Text("Re-run checks") }
+                }
             }
         }
         item {
@@ -130,37 +155,46 @@ private fun SettingsScreen() {
                     Prefs.enabled = it
                     val i = Intent(ctx, AodService::class.java)
                     if (it) ContextCompat.startForegroundService(ctx, i) else ctx.stopService(i)
-                })
+                    tick++
+                }, enabled = ready || enabled)
             }
         }
         item {
-            Button({ ctx.startActivity(Intent(ctx, AodActivity::class.java)) }) { Text("Preview (triple-tap to close)") }
-        }
-
-        item { Header("Permissions") }
-        item { PermRow("Notification access (required)", listener) { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
-        item {
-            PermRow("Draw over other apps (required)", overlay) {
-                ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}")))
-            }
-        }
-        item { PermRow("Screen lock set (PIN, pattern or password)", secure) { ctx.startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS)) } }
-        item { Text("The AOD only appears while the phone is locked behind it. If it can't lock the phone, the screen stays off instead.", style = MaterialTheme.typography.bodySmall) }
-        item {
-            PermRow("Device admin (lets AOD lock the phone)", admin) {
-                ctx.startActivity(
-                    Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
-                        .putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComp)
-                        .putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Lets My AOD lock the phone when the always-on display appears. It cannot do anything else.")
+            Column {
+                Button(
+                    { lockPhone(ctx) },
+                    enabled = ready && enabled && running
+                ) { Text("Lock test: lock phone now") }
+                Text(
+                    "Locks the phone right now. The AOD should appear within a second and a triple-tap should ask for your PIN. If the screen stays off, check \"Last screen-off\" above.",
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
         }
-        item { PermRow("Show service notification", postNotif) { permLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) } }
-        item { PermRow("Calendar", calendar) { permLauncher.launch(Manifest.permission.READ_CALENDAR) } }
-        item { PermRow("Location (for weather)", location) { permLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION) } }
         item {
-            PermRow("Unrestricted battery (keeps it alive)", ignoringBattery) {
-                ctx.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}")))
+            OutlinedButton({ ctx.startActivity(Intent(ctx, AodActivity::class.java).putExtra("preview", true)) }) { Text("Preview (triple-tap to close)") }
+        }
+
+        for ((level, title) in listOf(0 to "Required: the app will not run without these", 1 to "Recommended", 2 to "Optional features")) {
+            val group = checks.filter { it.level == level }
+            if (group.isEmpty()) continue
+            item { Header(title) }
+            items(group) { c ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text((if (c.ok) "✅ " else if (c.required) "⛔ " else "⚠️ ") + c.title)
+                        Text(c.why, style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (!c.ok && (c.permission != null || c.intent != null)) Button({
+                        if (c.permission != null) permLauncher.launch(c.permission) else ctx.startActivity(c.intent)
+                    }) { Text("Fix") }
+                }
+            }
+            if (level == 1) item {
+                Text(
+                    "Also check Settings → Security → Smart Lock and turn off On-body detection. Otherwise Android can keep the phone unlocked in your pocket. The app can't detect this setting.",
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
 

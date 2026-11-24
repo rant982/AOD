@@ -31,6 +31,13 @@ object AodState {
 
     @Volatile var lastLaunch = 0L
 
+    /** Plain-English result of the most recent screen-off, shown in the self-test. */
+    @Volatile var lastEvent = "none yet"
+
+    fun log(msg: String) {
+        lastEvent = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()) + "  " + msg
+    }
+
     /** True while the PIN/biometric prompt is up, so the lock watchdog stays out of the way. */
     @Volatile var unlocking = false
 
@@ -49,6 +56,7 @@ class AodActivity : ComponentActivity(), SensorEventListener {
     private lateinit var sm: SensorManager
     private lateinit var km: KeyguardManager
     private val handler = Handler(Looper.getMainLooper())
+    private val preview by lazy { intent.getBooleanExtra("preview", false) }
 
     private val dndReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) = applyBrightness()
@@ -114,7 +122,7 @@ class AodActivity : ComponentActivity(), SensorEventListener {
     override fun onResume() {
         super.onResume()
         AodState.unlocking = false
-        handler.post(guard)
+        if (!preview) handler.post(guard)
         if (Prefs.hideCovered) {
             sm.getDefaultSensor(Sensor.TYPE_PROXIMITY)?.let { sm.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }
             sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let { sm.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }

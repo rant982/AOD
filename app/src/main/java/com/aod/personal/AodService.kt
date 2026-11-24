@@ -2,6 +2,7 @@ package com.aod.personal
 
 import android.app.KeyguardManager
 import android.app.Notification
+import android.app.PendingIntent
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
@@ -25,10 +26,19 @@ import androidx.core.app.ServiceCompat
 class AodService : Service() {
     private val handler = Handler(Looper.getMainLooper())
 
+    companion object {
+        @Volatile var running = false
+    }
+
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             if (i.action != Intent.ACTION_SCREEN_OFF) return
             if (System.currentTimeMillis() - AodState.lastLaunch < 1500) return
+            val missing = Requirements.missingRequired(this@AodService)
+            if (missing.isNotEmpty()) {
+                AodState.log("Screen off: AOD NOT shown. Setup incomplete (${missing.joinToString { it.title }}).")
+                return
+            }
             if (AodState.showing && Prefs.powerOff) {
                 AodState.finish() // power button = fully off
                 lockPhone(this@AodService)
@@ -46,12 +56,35 @@ class AodService : Service() {
     override fun onCreate() {
         super.onCreate()
         Prefs.init(this)
+        running = true
         registerReceiver(screenReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel("aod", "AOD running", NotificationManager.IMPORTANCE_MIN))
+        nm.createNotificationChannel(NotificationChannel("aod_alert", "AOD can't run", NotificationManager.IMPORTANCE_DEFAULT))
+        val missing = Requirements.missingRequired(this)
+        if (missing.isNotEmpty()) {
+            // Refuse to run half-configured: say so, switch off, stop.
+            val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+            val alert = NotificationCompat.Builder(this, "aod_alert")
+                .setSmallIcon(R.drawable.ic_launcher)
+                .setContentTitle("My AOD can't run")
+                .setContentText("Missing: " + missing.joinToString { it.title })
+                .setContentIntent(open)
+                .setAutoCancel(true)
+                .build()
+            ServiceCompat.startForeground(
+                this, 1, alert,
+                if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
+            )
+            stopForeground(STOP_FOREGROUND_DETACH)
+            Prefs.enabled = false
+            AodState.log("Not started. Missing: " + missing.joinToString { it.title })
+            stopSelf()
+            return START_NOT_STICKY
+        }
         val n: Notification = NotificationCompat.Builder(this, "aod")
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle("Always-on display is active")
@@ -66,17 +99,23 @@ class AodService : Service() {
     }
 
     private fun launch(retry: Boolean) {
-        if (!Settings.canDrawOverlays(this)) return
+        if (!Settings.canDrawOverlays(this)) {
+            AodState.log("AOD NOT shown: no 'Draw over other apps' permission.")
+            return
+        }
         val km = getSystemService(KeyguardManager::class.java)
         if (!km.isDeviceLocked) {
             // Never show the AOD over an unlocked phone. Try once more, then give up (screen stays off).
             if (retry) {
                 lockPhone(this)
                 handler.postDelayed({ launch(false) }, 400)
+            } else {
+                AodState.log("AOD NOT shown: Android says the phone isn't locked (Device admin missing, or Smart Lock keeping it open). Screen left off.")
             }
             return
         }
         AodState.lastLaunch = System.currentTimeMillis()
+        AodState.log("Screen off: phone locked, AOD shown.")
         startActivity(
             Intent(this, AodActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_ANIMATION)
@@ -84,6 +123,7 @@ class AodService : Service() {
     }
 
     override fun onDestroy() {
+        running = false
         unregisterReceiver(screenReceiver)
         handler.removeCallbacksAndMessages(null)
         super.onDestroy()
