@@ -7,6 +7,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.Sensor
+import android.media.AudioManager
+import android.os.PowerManager
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
@@ -30,6 +32,10 @@ object AodState {
     val showing get() = activity?.get() != null
 
     @Volatile var lastLaunch = 0L
+
+    /** When an ordinary (non-call, non-alarm) notification last arrived, and when we last brought the AOD back. */
+    @Volatile var lastNotifAt = 0L
+    @Volatile var lastRelaunch = 0L
 
     /** Plain-English result of the most recent screen-off, shown in the self-test. */
     @Volatile var lastEvent = "none yet"
@@ -72,6 +78,25 @@ class AodActivity : ComponentActivity(), SensorEventListener {
             ensureLocked()
             handler.postDelayed(this, 2000)
         }
+    }
+
+    /**
+     * If a new notification makes the phone push its own lock screen over the AOD, bring the AOD back.
+     * Only for ordinary notifications while the phone is locked and awake, never during a call or alarm.
+     */
+    private val relaunch = Runnable {
+        if (isFinishing || isDestroyed || preview) return@Runnable
+        val now = System.currentTimeMillis()
+        val awake = getSystemService(PowerManager::class.java).isInteractive
+        val idle = getSystemService(AudioManager::class.java).mode == AudioManager.MODE_NORMAL
+        if (!km.isDeviceLocked || !awake || !idle) return@Runnable
+        if (now - AodState.lastNotifAt > 5000 || now - AodState.lastRelaunch < 2000) return@Runnable
+        AodState.lastRelaunch = now
+        AodState.log("A notification pushed the AOD aside; brought it back.")
+        startActivity(
+            Intent(this, AodActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+        )
     }
 
     private fun ensureLocked() {
@@ -126,6 +151,7 @@ class AodActivity : ComponentActivity(), SensorEventListener {
     override fun onResume() {
         super.onResume()
         AodState.unlocking = false
+        handler.removeCallbacks(relaunch)
         if (!preview) handler.post(guard)
         if (Prefs.hideCovered) {
             sm.getDefaultSensor(Sensor.TYPE_PROXIMITY)?.let { sm.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }
@@ -136,6 +162,7 @@ class AodActivity : ComponentActivity(), SensorEventListener {
     override fun onPause() {
         super.onPause()
         handler.removeCallbacks(guard)
+        if (!isFinishing) handler.postDelayed(relaunch, 400)
         sm.unregisterListener(this)
     }
 

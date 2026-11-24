@@ -43,7 +43,13 @@ class NotifService : NotificationListenerService() {
         watched = emptyList()
     }
 
-    override fun onNotificationPosted(sbn: StatusBarNotification) = refresh(true)
+    override fun onNotificationPosted(sbn: StatusBarNotification) {
+        val n = sbn.notification
+        if (sbn.packageName != packageName && n.fullScreenIntent == null &&
+            n.category != Notification.CATEGORY_CALL && n.category != Notification.CATEGORY_ALARM
+        ) AodState.lastNotifAt = System.currentTimeMillis()
+        refresh(true)
+    }
     override fun onNotificationRemoved(sbn: StatusBarNotification) = refresh(false)
 
     private fun refresh(emit: Boolean) {
