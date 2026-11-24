@@ -15,6 +15,19 @@ android {
         versionCode = build
         versionName = "1.1.$build"
     }
+    // Stable signing key (supplied by CI from GitHub secrets) so each build installs over the last one.
+    val ksPath = System.getenv("AOD_KEYSTORE")
+    if (ksPath != null) {
+        signingConfigs {
+            create("aod") {
+                storeFile = file(ksPath)
+                storePassword = System.getenv("AOD_KEYSTORE_PASSWORD")
+                keyAlias = "aod"
+                keyPassword = System.getenv("AOD_KEYSTORE_PASSWORD")
+            }
+        }
+        buildTypes { getByName("debug") { signingConfig = signingConfigs.getByName("aod") } }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
