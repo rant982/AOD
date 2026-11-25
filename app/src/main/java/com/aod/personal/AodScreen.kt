@@ -203,6 +203,14 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
     val activity = ctx as? Activity
     var expanded by remember { mutableStateOf<String?>(null) }
     var showVersion by remember { mutableStateOf(true) }
+    // "Hidden WhatsApp. Undo": shown for 7 seconds after a Never-this-app / Never-this-notification tap. No confirmation is ever asked.
+    var undo by remember { mutableStateOf<UndoInfo?>(null) }
+    LaunchedEffect(undo) {
+        if (undo != null) {
+            delay(7_000)
+            undo = null
+        }
+    }
     LaunchedEffect(Unit) {
         delay(10_000)
         showVersion = false
@@ -378,11 +386,19 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                         Prefs.blocked = Prefs.blocked + n.pkg
                                         NotifService.refreshNow()
                                         expanded = null
+                                        undo = UndoInfo("Hidden: ${n.app}") {
+                                            Prefs.blocked = Prefs.blocked - n.pkg
+                                            NotifService.refreshNow()
+                                        }
                                     }
                                     HideChip("Never this notification", dim) {
                                         Prefs.muted = Prefs.muted + "${n.pkg}|${n.title}"
                                         NotifService.refreshNow()
                                         expanded = null
+                                        undo = UndoInfo("Hidden: this notification") {
+                                            Prefs.muted = Prefs.muted - "${n.pkg}|${n.title}"
+                                            NotifService.refreshNow()
+                                        }
                                     }
                                 }
                             }
@@ -391,8 +407,28 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                 }
             }
         }
+        undo?.let { u ->
+            Row(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .systemBarsPadding()
+                    .padding(bottom = 24.dp)
+                    .background(Color(0xFF222222), RoundedCornerShape(24.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(u.text, color = dim, fontSize = 13.sp)
+                HideChip("Undo", dim, "↶") {
+                    u.restore()
+                    undo = null
+                }
+            }
+        }
     }
 }
+
+private class UndoInfo(val text: String, val restore: () -> Unit)
 
 @Composable
 private fun Line(text: String, color: Color, size: Int) {
