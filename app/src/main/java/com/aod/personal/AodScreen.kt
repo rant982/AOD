@@ -309,7 +309,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                         Modifier
                                             .tapOrTriple(
                                                 onTap = { expanded = if (expanded == n.key) null else n.key },
-                                                onTriple = {} // icons only show the text; they never unlock
+                                                onTriple = { activity?.let { a -> openNotification(a, n) } } // triple-tap an icon to open its app
                                             )
                                             .alpha(if (Prefs.iconStyle != 0 && expanded != n.key) 0.8f else 1f)
                                             .padding(10.dp)
@@ -425,6 +425,7 @@ private fun openNotification(activity: Activity, n: NotifItem) {
         km.isKeyguardLocked -> {
             AodState.pendingOpen = n
             AodState.pendingAt = System.currentTimeMillis()
+            AodState.suppressRelaunchUntil = System.currentTimeMillis() + 30_000
             activity.finish()
         }
         else -> authenticateThen(activity) {
@@ -456,8 +457,31 @@ fun openNotificationNow(ctx: Context, n: NotifItem) {
  */
 fun unlock(activity: Activity) {
     val km = activity.getSystemService(KeyguardManager::class.java)
-    if (km.isKeyguardLocked || activity.intent.getBooleanExtra("preview", false)) activity.finish()
-    else authenticateThen(activity) { activity.finish() }
+    if (activity.intent.getBooleanExtra("preview", false)) {
+        activity.finish()
+        return
+    }
+    if (km.isKeyguardLocked) {
+        // Heading into the phone: land on Home after unlocking, and keep the AOD from coming back meanwhile.
+        val until = System.currentTimeMillis() + 30_000
+        AodState.wantHomeUntil = until
+        AodState.suppressRelaunchUntil = until
+        activity.finish()
+    } else {
+        authenticateThen(activity) {
+            goHome(activity)
+            activity.finish()
+        }
+    }
+}
+
+/** The home screen, whatever launcher is in use. */
+fun goHome(ctx: Context) {
+    try {
+        ctx.startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    } catch (e: Exception) {
+        AodLog.add("Could not open the home screen: ${e.message}")
+    }
 }
 
 /**

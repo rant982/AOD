@@ -39,6 +39,10 @@ object AodState {
     @Volatile var lastNotifAt = 0L
     @Volatile var lastRelaunch = 0L
 
+    /** Set when the user triple-taps to go into the phone: land on Home after unlocking, and don't bring the AOD back meanwhile. */
+    @Volatile var wantHomeUntil = 0L
+    @Volatile var suppressRelaunchUntil = 0L
+
     /** Last call/alarm/full-screen notification: never fight those for the screen. */
     @Volatile var lastFullScreenAt = 0L
     val relaunchTimes = mutableListOf<Long>()
@@ -76,6 +80,7 @@ object AodState {
         val idle = ctx.getSystemService(AudioManager::class.java).mode == AudioManager.MODE_NORMAL
         val now = System.currentTimeMillis()
         if (!km.isKeyguardLocked || !awake || !idle) return
+        if (now < suppressRelaunchUntil) return
         if (now - lastFullScreenAt < 120_000 || now - lastRelaunch < 1500) return
         relaunchTimes.removeAll { now - it > 30_000 }
         if (relaunchTimes.size >= 6) return

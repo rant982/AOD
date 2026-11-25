@@ -40,6 +40,14 @@ class AodService : Service() {
             }
             if (i.action != Intent.ACTION_SCREEN_OFF) return
             AodLog.add("SCREEN_OFF $state")
+            if (System.currentTimeMillis() < AodState.suppressRelaunchUntil) {
+                // The user was on the way into the phone (lock screen timed out first): don't throw the AOD back up.
+                AodState.suppressRelaunchUntil = 0
+                AodState.wantHomeUntil = 0
+                AodState.pendingOpen = null
+                AodLog.add("SCREEN_OFF: the user was heading into the phone, so the AOD was not relaunched")
+                return
+            }
             AodState.pendingOpen = null // never open a stale message after the screen has gone off
             if (System.currentTimeMillis() - AodState.lastLaunch < 1500) return
             val missing = Requirements.missingForService(this@AodService)
@@ -64,9 +72,19 @@ class AodService : Service() {
     private val unlockReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             AodLog.add("USER_PRESENT (phone unlocked)")
-            val n = AodState.pendingOpen ?: return
+            val now = System.currentTimeMillis()
+            val n = AodState.pendingOpen
             AodState.pendingOpen = null
-            if (System.currentTimeMillis() - AodState.pendingAt < 60_000) openNotificationNow(this@AodService, n)
+            AodState.suppressRelaunchUntil = 0
+            if (n != null) {
+                // Triple-tapped an icon or its text: take the user to that app.
+                if (now - AodState.pendingAt < 60_000) openNotificationNow(this@AodService, n)
+            } else if (now < AodState.wantHomeUntil) {
+                // Triple-tapped the clock: take the user to the home screen, never back into the AOD.
+                AodState.wantHomeUntil = 0
+                AodLog.add("Going to the home screen")
+                goHome(this@AodService)
+            }
         }
     }
 

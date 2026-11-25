@@ -32,7 +32,7 @@ class WatchdogReceiver : BroadcastReceiver() {
             }
         }
 
-        if (!Prefs.powerOff && !pm.isInteractive && !AodState.showing && Settings.canDrawOverlays(c)) {
+        if (!Prefs.powerOff && !pm.isInteractive && !AodState.showing && System.currentTimeMillis() >= AodState.suppressRelaunchUntil && Settings.canDrawOverlays(c)) {
             val pending = goAsync()
             if (!km.isDeviceLocked) lockPhone(c)
             Handler(Looper.getMainLooper()).postDelayed({
