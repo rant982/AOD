@@ -63,6 +63,9 @@ object AodState {
 
     /** A message to open once the user unlocks (set by a triple-tap on its text). */
     @Volatile var pendingOpen: NotifItem? = null
+
+    /** A calendar appointment to open once the user unlocks. */
+    @Volatile var pendingIntent: Intent? = null
     @Volatile var pendingAt = 0L
 
     fun finish() {

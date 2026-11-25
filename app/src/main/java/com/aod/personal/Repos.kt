@@ -17,7 +17,7 @@ import java.net.URL
 data class NotifItem(val key: String, val pkg: String, val app: String, val title: String, val text: String, val icon: Bitmap?, val intent: PendingIntent?, val color: Int = 0, val appIcon: Bitmap? = null)
 data class MediaInfo(val title: String, val artist: String)
 data class Weather(val tempC: Float, val code: Int, val feelsC: Float? = null, val hiC: Float? = null, val loC: Float? = null)
-data class CalEvent(val title: String, val begin: Long, val end: Long)
+data class CalEvent(val title: String, val begin: Long, val end: Long, val id: Long = 0)
 
 object NotifRepo {
     val items = MutableStateFlow<List<NotifItem>>(emptyList())
@@ -27,6 +27,21 @@ object NotifRepo {
 }
 
 object CalendarRepo {
+    private fun key(id: Long, begin: Long) = "$id|$begin"
+
+    /** Hides this appointment from the AOD (it is not deleted from the calendar). */
+    fun dismiss(e: CalEvent) {
+        val cutoff = System.currentTimeMillis() - 24 * 3600_000L
+        Prefs.dismissedEvents = Prefs.dismissedEvents.filter { (it.substringAfter('|').toLongOrNull() ?: 0L) > cutoff }.toSet() + key(e.id, e.begin)
+    }
+
+    /** Opens the appointment itself in the calendar app. */
+    fun viewIntent(e: CalEvent): android.content.Intent =
+        android.content.Intent(android.content.Intent.ACTION_VIEW)
+            .setData(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, e.id))
+            .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, e.begin)
+            .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, e.end)
+
     fun next(ctx: Context): CalEvent? {
         if (ctx.checkSelfPermission(Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) return null
         val now = System.currentTimeMillis()
@@ -36,15 +51,17 @@ object CalendarRepo {
         return try {
             ctx.contentResolver.query(
                 b.build(),
-                arrayOf(CalendarContract.Instances.TITLE, CalendarContract.Instances.BEGIN, CalendarContract.Instances.END, CalendarContract.Instances.ALL_DAY),
+                arrayOf(CalendarContract.Instances.TITLE, CalendarContract.Instances.BEGIN, CalendarContract.Instances.END, CalendarContract.Instances.ALL_DAY, CalendarContract.Instances.EVENT_ID),
                 null, null, "begin ASC"
             )?.use { c ->
                 var result: CalEvent? = null
+                val dismissed = Prefs.dismissedEvents
                 while (c.moveToNext()) {
                     if (c.getInt(3) == 1) continue
                     val end = c.getLong(2)
                     if (end <= now) continue
-                    result = CalEvent(c.getString(0) ?: "(no title)", c.getLong(1), end)
+                    if (key(c.getLong(4), c.getLong(1)) in dismissed) continue
+                    result = CalEvent(c.getString(0) ?: "(no title)", c.getLong(1), end, c.getLong(4))
                     break
                 }
                 result
@@ -57,9 +74,9 @@ object CalendarRepo {
 
 object WeatherRepo {
     /** Returns cached weather if fresh, otherwise fetches from Open-Meteo. Call off the main thread. */
-    fun load(ctx: Context): Weather? {
+    fun load(ctx: Context, force: Boolean = false): Weather? {
         val age = System.currentTimeMillis() - Prefs.wTime
-        if (Prefs.wCode >= 0 && age < 30 * 60_000L) return cached()
+        if (!force && Prefs.wCode >= 0 && age < 30 * 60_000L) return cached()
         val (lat, lon) = location(ctx) ?: return cached()
         return try {
             val url = URL(

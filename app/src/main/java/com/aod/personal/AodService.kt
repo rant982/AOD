@@ -45,10 +45,12 @@ class AodService : Service() {
                 AodState.suppressRelaunchUntil = 0
                 AodState.wantHomeUntil = 0
                 AodState.pendingOpen = null
+                AodState.pendingIntent = null
                 AodLog.add("SCREEN_OFF: the user was heading into the phone, so the AOD was not relaunched")
                 return
             }
             AodState.pendingOpen = null // never open a stale message after the screen has gone off
+            AodState.pendingIntent = null
             if (System.currentTimeMillis() - AodState.lastLaunch < 1500) return
             val missing = Requirements.missingForService(this@AodService)
             if (missing.isNotEmpty()) {
@@ -75,10 +77,21 @@ class AodService : Service() {
             val now = System.currentTimeMillis()
             val n = AodState.pendingOpen
             AodState.pendingOpen = null
+            val pi = AodState.pendingIntent
+            AodState.pendingIntent = null
             AodState.suppressRelaunchUntil = 0
             if (n != null) {
                 // Triple-tapped an icon or its text: take the user to that app.
                 if (now - AodState.pendingAt < 60_000) openNotificationNow(this@AodService, n)
+            } else if (pi != null) {
+                // Triple-tapped the calendar line: take the user to that appointment.
+                if (now - AodState.pendingAt < 60_000) {
+                    try {
+                        startActivity(pi.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    } catch (e: Exception) {
+                        AodLog.add("Could not open the calendar: ${e.message}")
+                    }
+                }
             } else if (now < AodState.wantHomeUntil) {
                 // Triple-tapped the clock: take the user to the home screen, never back into the AOD.
                 AodState.wantHomeUntil = 0

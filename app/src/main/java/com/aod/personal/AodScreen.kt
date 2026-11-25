@@ -47,7 +47,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import kotlinx.coroutines.launch
 import androidx.compose.ui.composed
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -130,6 +132,8 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
     }
 
     // Weather and calendar
+    val scope = rememberCoroutineScope()
+    var weatherStatus by remember { mutableStateOf("") }
     var weather by remember { mutableStateOf<Weather?>(null) }
     LaunchedEffect(Unit) {
         while (Prefs.showWeather) {
@@ -294,11 +298,44 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
 
                     "BATTERY" -> batteryText?.let { Line(it, infoC, 16) }
 
-                    "WEATHER" -> weatherText?.let { Line(it, infoC, 16) }
+                    // Double- or triple-tap the weather to fetch the latest forecast.
+                    "WEATHER" -> weatherText?.let { w ->
+                        Line(
+                            w + weatherStatus, infoC, 16,
+                            Modifier
+                                .tapOrTriple(onTap = {}, taps = 2, onTriple = {
+                                    if (weatherStatus.isEmpty()) {
+                                        weatherStatus = "  ↻ updating…"
+                                        scope.launch {
+                                            val before = Prefs.wTime
+                                            val fresh = withContext(Dispatchers.IO) { WeatherRepo.load(ctx, force = true) }
+                                            if (fresh != null) weather = fresh
+                                            weatherStatus = if (Prefs.wTime > before) "" else "  (couldn't update)"
+                                            if (weatherStatus.isNotEmpty()) {
+                                                delay(3_000)
+                                                weatherStatus = ""
+                                            }
+                                        }
+                                    }
+                                })
+                                .padding(vertical = 4.dp)
+                        )
+                    }
 
-                    "CALENDAR" -> event?.takeIf { Prefs.showCalendar }?.let {
-                        val time = if (it.begin <= now) "Now" else SimpleDateFormat(if (Prefs.use24h) "HH:mm" else "h:mm a", Locale.getDefault()).format(Date(it.begin))
-                        Line("📅 $time  ${it.title}", infoC, 14)
+                    // Swipe the next appointment away, or triple-tap it to open it in the calendar.
+                    "CALENDAR" -> event?.takeIf { Prefs.showCalendar }?.let { ev ->
+                        val time = if (ev.begin <= now) "Now" else SimpleDateFormat(if (Prefs.use24h) "HH:mm" else "h:mm a", Locale.getDefault()).format(Date(ev.begin))
+                        Line(
+                            "📅 $time  ${ev.title}", infoC, 14,
+                            Modifier
+                                .swipeAway {
+                                    CalendarRepo.dismiss(ev)
+                                    event = null
+                                    scope.launch { event = withContext(Dispatchers.IO) { CalendarRepo.next(ctx) } }
+                                }
+                                .tapOrTriple(onTap = {}, onTriple = { activity?.let { a -> openCalendarEvent(a, ev) } })
+                                .padding(vertical = 6.dp)
+                        )
                     }
 
                     "MUSIC" -> media?.takeIf { Prefs.showMusic }?.let {
@@ -431,11 +468,11 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
 private class UndoInfo(val text: String, val restore: () -> Unit)
 
 @Composable
-private fun Line(text: String, color: Color, size: Int) {
+private fun Line(text: String, color: Color, size: Int, modifier: Modifier = Modifier) {
     // Long lines (weather description, calendar titles) carry on to a second or third row.
     Text(
         text, color = color, fontSize = size.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
-        textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()
+        textAlign = TextAlign.Center, modifier = modifier.fillMaxWidth()
     )
 }
 
@@ -459,7 +496,7 @@ private fun Logo(accent: Color) {
 }
 
 /** Single tap -> onTap; three quick taps -> onTriple. Consumes the taps so the global wake gesture doesn't fire. */
-private fun Modifier.tapOrTriple(onTap: () -> Unit, onTriple: () -> Unit): Modifier = composed {
+private fun Modifier.tapOrTriple(onTap: () -> Unit, onTriple: () -> Unit, taps: Int = 3): Modifier = composed {
     val tap by rememberUpdatedState(onTap)
     val triple by rememberUpdatedState(onTriple)
     val times = remember { mutableListOf<Long>() }
@@ -468,7 +505,7 @@ private fun Modifier.tapOrTriple(onTap: () -> Unit, onTriple: () -> Unit): Modif
             val t = System.currentTimeMillis()
             times.removeAll { t - it > 800 }
             times.add(t)
-            if (times.size >= 3) {
+            if (times.size >= taps) {
                 times.clear()
                 triple()
             } else if (times.size == 1) tap()
@@ -480,6 +517,30 @@ private fun Modifier.tapOrTriple(onTap: () -> Unit, onTriple: () -> Unit): Modif
  * Triple-tap on the text: remember which message to open, reveal the real lock screen, and let the service
  * open it as soon as you unlock (face, fingerprint or PIN, whichever you use).
  */
+private fun openCalendarEvent(activity: Activity, e: CalEvent) {
+    AodLog.add("Triple-tap on the calendar line")
+    val km = activity.getSystemService(KeyguardManager::class.java)
+    val intent = CalendarRepo.viewIntent(e).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    fun start() {
+        try {
+            activity.startActivity(intent)
+        } catch (ex: Exception) {
+            AodLog.add("Could not open the calendar: ${ex.message}")
+        }
+        activity.finish()
+    }
+    when {
+        activity.intent.getBooleanExtra("preview", false) -> start()
+        km.isKeyguardLocked -> {
+            AodState.pendingIntent = intent
+            AodState.pendingAt = System.currentTimeMillis()
+            AodState.suppressRelaunchUntil = System.currentTimeMillis() + 30_000
+            activity.finish()
+        }
+        else -> authenticateThen(activity) { start() }
+    }
+}
+
 private fun openNotification(activity: Activity, n: NotifItem) {
     AodLog.add("Triple-tap on notification text pkg=${n.pkg}")
     val km = activity.getSystemService(KeyguardManager::class.java)

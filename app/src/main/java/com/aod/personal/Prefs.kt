@@ -80,6 +80,11 @@ object Prefs {
         get() = sp.getStringSet("blocked", emptySet())!!.toSet()
         set(v) = sp.edit().putStringSet("blocked", v).apply()
 
+    /** Calendar events swiped away on the AOD, as "eventId|beginMillis". Old ones are pruned automatically. */
+    var dismissedEvents: Set<String>
+        get() = sp.getStringSet("dismissedEvents", emptySet())!!.toSet()
+        set(v) = sp.edit().putStringSet("dismissedEvents", v).apply()
+
     /** Notifications hidden for good, stored as "package|title". */
     var muted: Set<String>
         get() = sp.getStringSet("muted", emptySet())!!.toSet()

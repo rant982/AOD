@@ -332,7 +332,7 @@ private fun SettingsScreen() {
         }
         item { SwitchRow("Go black when face-down or in pocket", Prefs.hideCovered) { Prefs.hideCovered = it } }
         item { SwitchRow("Power button turns the screen fully off (otherwise the AOD comes straight back)", Prefs.powerOff) { Prefs.powerOff = it } }
-        item { Text("Tap an icon (e.g. WhatsApp) to show its text. Triple-tap an icon or its text to open that app (swipe the text sideways to clear it). Triple-tap the clock to go to your home screen. Taps anywhere else do nothing, so the pocket is safe.", style = MaterialTheme.typography.bodySmall) }
+        item { Text("Tap an icon (e.g. WhatsApp) to show its text. Triple-tap an icon or its text to open that app (swipe the text sideways to clear it). Triple-tap the clock to go to your home screen. Triple-tap the calendar line to open that appointment, or swipe it away. Double-tap the weather to refresh it. Taps anywhere else do nothing, so the pocket is safe.", style = MaterialTheme.typography.bodySmall) }
 
         item { Header("Diagnostics") }
         item {
