@@ -50,7 +50,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import androidx.compose.ui.composed
 import androidx.compose.runtime.collectAsState
@@ -143,7 +142,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
             delay(30 * 60_000L)
         }
     }
-    // Weather: tap = full detail (when set to temperature only), double-tap = refresh now, triple-tap = open the forecast.
+    // Weather: tap once = full detail and a fresh forecast; tap again (within 10 seconds) = open the forecast.
     var weatherExpanded by remember { mutableStateOf(false) }
     LaunchedEffect(weatherExpanded) {
         if (weatherExpanded) {
@@ -283,7 +282,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
             }
             val infoC = colorOr(Prefs.infoColor, dim)
             val batteryText = if (Prefs.showBattery && battery.first >= 0) (if (battery.second) "⚡" else "🔋") + " ${battery.first}%" else null
-            val weatherText = weather?.takeIf { Prefs.showWeather }?.let { WeatherRepo.format(it, Prefs.fahrenheit, if (Prefs.weatherStyle == 0 && weatherExpanded) 2 else Prefs.weatherStyle) }
+            val weatherText = weather?.takeIf { Prefs.showWeather }?.let { WeatherRepo.format(it, Prefs.fahrenheit, if (weatherExpanded) 2 else Prefs.weatherStyle) }
 
             // Blocks are drawn in the order chosen in Settings.
             order.forEachIndexed { idx, key ->
@@ -327,11 +326,15 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                         Line(
                             w + weatherStatus, infoC, 16,
                             Modifier
-                                .multiTap(
-                                    onSingle = { if (Prefs.weatherStyle == 0) weatherExpanded = !weatherExpanded },
-                                    onDouble = refreshWeather,
-                                    onTriple = { activity?.let { act -> openWeather(act) } }
-                                )
+                                .onTapOnly {
+                                    if (!weatherExpanded) {
+                                        weatherExpanded = true
+                                        if (System.currentTimeMillis() - Prefs.wTime > 2 * 60_000L) refreshWeather()
+                                    } else {
+                                        weatherExpanded = false
+                                        activity?.let { act -> openWeather(act) }
+                                    }
+                                }
                                 .padding(vertical = 4.dp)
                         )
                     }
@@ -509,8 +512,8 @@ private fun Logo(accent: Color) {
     }
 }
 
-/** Single tap -> onTap; three quick taps -> onTriple. Consumes the taps so the global wake gesture doesn't fire. */
-private fun Modifier.tapOrTriple(onTap: () -> Unit, onTriple: () -> Unit, taps: Int = 3): Modifier = composed {
+/** Single tap -> onTap; the set number of quick taps (2 by default) -> onTriple. Consumes the taps so the global wake gesture doesn't fire. */
+private fun Modifier.tapOrTriple(onTap: () -> Unit, onTriple: () -> Unit, taps: Int = Prefs.openTaps): Modifier = composed {
     val tap by rememberUpdatedState(onTap)
     val triple by rememberUpdatedState(onTriple)
     val times = remember { mutableListOf<Long>() }
@@ -717,28 +720,8 @@ private fun iconTint(n: NotifItem, selected: Boolean, accent: Color, dim: Color)
     else -> ColorFilter.tint(if (selected) accent else dim)
 }
 
-/** One, two or three taps do different things. Acts about half a second after the last tap. */
-private fun Modifier.multiTap(onSingle: () -> Unit, onDouble: () -> Unit, onTriple: () -> Unit): Modifier = composed {
-    val single by rememberUpdatedState(onSingle)
-    val double by rememberUpdatedState(onDouble)
-    val triple by rememberUpdatedState(onTriple)
-    val scope = rememberCoroutineScope()
-    val count = remember { IntArray(1) }
-    val job = remember { arrayOfNulls<Job>(1) }
-    pointerInput(Unit) {
-        detectTapGestures(onTap = {
-            count[0]++
-            job[0]?.cancel()
-            job[0] = scope.launch {
-                delay(450)
-                val c = count[0]
-                count[0] = 0
-                when {
-                    c >= 3 -> triple()
-                    c == 2 -> double()
-                    else -> single()
-                }
-            }
-        })
-    }
+/** Plain single-tap handler (no counting). */
+private fun Modifier.onTapOnly(action: () -> Unit): Modifier = composed {
+    val act by rememberUpdatedState(action)
+    pointerInput(Unit) { detectTapGestures(onTap = { act() }) }
 }

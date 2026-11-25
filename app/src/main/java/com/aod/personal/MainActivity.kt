@@ -234,13 +234,13 @@ private fun SettingsScreen() {
                     enabled = ready && enabled && running
                 ) { Text("Lock test: lock phone now") }
                 Text(
-                    "Locks the phone right now. The AOD should appear within a second and a triple-tap should show your lock screen, where face or fingerprint work. If the screen stays off, check \"Last screen-off\" above.",
+                    "Locks the phone right now. The AOD should appear within a second and a quick double-tap on the clock should show your lock screen, where face or fingerprint work. If the screen stays off, check \"Last screen-off\" above.",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
         }
         item {
-            OutlinedButton({ ctx.startActivity(Intent(ctx, AodActivity::class.java).putExtra("preview", true)) }) { Text("Preview (triple-tap the clock to close)") }
+            OutlinedButton({ ctx.startActivity(Intent(ctx, AodActivity::class.java).putExtra("preview", true)) }) { Text("Preview (tap the clock ${Prefs.openTaps} times to close)") }
         }
 
         // When anything required is missing the checklist sits right here; once all is well it moves to the bottom.
@@ -301,7 +301,7 @@ private fun SettingsScreen() {
                 }
             }
             Column {
-                Text("Tap the weather on the AOD for full detail, double-tap to refresh, triple-tap to open the forecast.", style = MaterialTheme.typography.bodySmall)
+                Text("On the AOD, tap the weather once for full detail and a fresh forecast, then tap again to open the forecast.", style = MaterialTheme.typography.bodySmall)
                 OutlinedButton({ showWeatherApp = true }) { Text("Forecast opens in: $appLabel") }
             }
         }
@@ -340,6 +340,10 @@ private fun SettingsScreen() {
         }
 
         item { Header("Behaviour") }
+        item {
+            var taps by remember { mutableIntStateOf(Prefs.openTaps) }
+            Chips("Taps to leave the AOD (clock, icons, calendar line)", listOf("2 taps", "3 taps"), taps - 2) { taps = it + 2; Prefs.openTaps = it + 2 }
+        }
         item { SwitchRow("Pixel shift (burn-in protection)", Prefs.pixelShift) { Prefs.pixelShift = it } }
         item {
             var amount by remember { mutableIntStateOf(Prefs.shiftAmount) }
@@ -347,7 +351,13 @@ private fun SettingsScreen() {
         }
         item { SwitchRow("Go black when face-down or in pocket", Prefs.hideCovered) { Prefs.hideCovered = it } }
         item { SwitchRow("Power button turns the screen fully off (otherwise the AOD comes straight back)", Prefs.powerOff) { Prefs.powerOff = it } }
-        item { Text("Tap an icon (e.g. WhatsApp) to show its text. Triple-tap an icon or its text to open that app (swipe the text sideways to clear it). Triple-tap the clock to go to your home screen. Triple-tap the calendar line to open that appointment, or swipe it away. Tap the weather for full detail, double-tap to refresh it, triple-tap to open the forecast. Taps anywhere else do nothing, so the pocket is safe.", style = MaterialTheme.typography.bodySmall) }
+        item {
+            val tapWord = if (Prefs.openTaps == 2) "Double-tap" else "Triple-tap"
+            Text(
+                "Tap an icon (e.g. WhatsApp) to show its text. $tapWord an icon or its text to open that app (swipe the text sideways to clear it). $tapWord the clock to go to your home screen. $tapWord the calendar line to open that appointment, or swipe it away. Tap the weather once for full detail, again to open the forecast. Taps anywhere else do nothing, so the pocket is safe.",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
 
         item { Header("Diagnostics") }
         item {

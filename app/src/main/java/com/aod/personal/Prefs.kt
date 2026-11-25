@@ -109,6 +109,9 @@ object Prefs {
 
     // Behaviour
     var pixelShift by B("pixelShift", true)
+
+    /** Taps needed on the clock / an icon / a calendar line to leave the AOD: 2 or 3. */
+    var openTaps by I("openTaps", 2)
     var powerOff by B("powerOff", false)
     var hideCovered by B("hideCovered", true)
 
