@@ -133,11 +133,11 @@ object WeatherRepo {
         else -> "unsettled"
     }
 
-    /** style 0: "☁️ 3°C"; 1: "☁️ 3°C and cloudy"; 2: adds feels-like and today's high and low. */
+    /** style 0: "3°C" (temperature only); 1: "☁️ 3°C and cloudy"; 2: adds feels-like and today's high and low. */
     fun format(w: Weather, fahrenheit: Boolean, style: Int): String {
         fun t(c: Float) = if (fahrenheit) "${Math.round(c * 9f / 5f + 32)}°F" else "${Math.round(c)}°C"
+        if (style == 0) return t(w.tempC)
         val base = "${emoji(w.code)} ${t(w.tempC)}"
-        if (style == 0) return base
         return buildString {
             append("$base and ${description(w.code)}")
             if (style >= 2) {

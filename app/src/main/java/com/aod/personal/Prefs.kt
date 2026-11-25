@@ -97,7 +97,9 @@ object Prefs {
     var infoColor by I("infoColor", 0)
 
     // 0 short, 1 with description, 2 full (feels like, high and low)
-    var weatherStyle by I("weatherStyle", 1)
+    var weatherStyle by I("weatherStyle", 0)
+    /** Package of the weather app opened by a triple-tap on the weather ("" = Google weather in the browser). */
+    var weatherApp by S("weatherApp", "")
     var wFeels by F("wFeels", -999f)
     var wHi by F("wHi", -999f)
     var wLo by F("wLo", -999f)

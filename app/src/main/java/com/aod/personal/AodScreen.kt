@@ -6,6 +6,7 @@ import android.hardware.biometrics.BiometricManager
 import android.hardware.biometrics.BiometricPrompt
 import android.os.CancellationSignal
 import android.app.ActivityOptions
+import android.net.Uri
 import android.os.Build
 import android.app.KeyguardManager
 import android.app.PendingIntent
@@ -49,6 +50,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import androidx.compose.ui.composed
 import androidx.compose.runtime.collectAsState
@@ -139,6 +141,29 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
         while (Prefs.showWeather) {
             weather = withContext(Dispatchers.IO) { WeatherRepo.load(ctx) }
             delay(30 * 60_000L)
+        }
+    }
+    // Weather: tap = full detail (when set to temperature only), double-tap = refresh now, triple-tap = open the forecast.
+    var weatherExpanded by remember { mutableStateOf(false) }
+    LaunchedEffect(weatherExpanded) {
+        if (weatherExpanded) {
+            delay(10_000)
+            weatherExpanded = false
+        }
+    }
+    val refreshWeather: () -> Unit = {
+        if (weatherStatus.isEmpty()) {
+            weatherStatus = "  ↻ updating…"
+            scope.launch {
+                val before = Prefs.wTime
+                val fresh = withContext(Dispatchers.IO) { WeatherRepo.load(ctx, force = true) }
+                if (fresh != null) weather = fresh
+                weatherStatus = if (Prefs.wTime > before) "" else "  (couldn't update)"
+                if (weatherStatus.isNotEmpty()) {
+                    delay(3_000)
+                    weatherStatus = ""
+                }
+            }
         }
     }
     var event by remember { mutableStateOf<CalEvent?>(null) }
@@ -258,7 +283,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
             }
             val infoC = colorOr(Prefs.infoColor, dim)
             val batteryText = if (Prefs.showBattery && battery.first >= 0) (if (battery.second) "⚡" else "🔋") + " ${battery.first}%" else null
-            val weatherText = weather?.takeIf { Prefs.showWeather }?.let { WeatherRepo.format(it, Prefs.fahrenheit, Prefs.weatherStyle) }
+            val weatherText = weather?.takeIf { Prefs.showWeather }?.let { WeatherRepo.format(it, Prefs.fahrenheit, if (Prefs.weatherStyle == 0 && weatherExpanded) 2 else Prefs.weatherStyle) }
 
             // Blocks are drawn in the order chosen in Settings.
             order.forEachIndexed { idx, key ->
@@ -298,26 +323,15 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
 
                     "BATTERY" -> batteryText?.let { Line(it, infoC, 16) }
 
-                    // Double- or triple-tap the weather to fetch the latest forecast.
                     "WEATHER" -> weatherText?.let { w ->
                         Line(
                             w + weatherStatus, infoC, 16,
                             Modifier
-                                .tapOrTriple(onTap = {}, taps = 2, onTriple = {
-                                    if (weatherStatus.isEmpty()) {
-                                        weatherStatus = "  ↻ updating…"
-                                        scope.launch {
-                                            val before = Prefs.wTime
-                                            val fresh = withContext(Dispatchers.IO) { WeatherRepo.load(ctx, force = true) }
-                                            if (fresh != null) weather = fresh
-                                            weatherStatus = if (Prefs.wTime > before) "" else "  (couldn't update)"
-                                            if (weatherStatus.isNotEmpty()) {
-                                                delay(3_000)
-                                                weatherStatus = ""
-                                            }
-                                        }
-                                    }
-                                })
+                                .multiTap(
+                                    onSingle = { if (Prefs.weatherStyle == 0) weatherExpanded = !weatherExpanded },
+                                    onDouble = refreshWeather,
+                                    onTriple = { activity?.let { act -> openWeather(act) } }
+                                )
                                 .padding(vertical = 4.dp)
                         )
                     }
@@ -517,15 +531,26 @@ private fun Modifier.tapOrTriple(onTap: () -> Unit, onTriple: () -> Unit, taps: 
  * Triple-tap on the text: remember which message to open, reveal the real lock screen, and let the service
  * open it as soon as you unlock (face, fingerprint or PIN, whichever you use).
  */
-private fun openCalendarEvent(activity: Activity, e: CalEvent) {
-    AodLog.add("Triple-tap on the calendar line")
+private fun openCalendarEvent(activity: Activity, e: CalEvent) =
+    openIntentAfterUnlock(activity, CalendarRepo.viewIntent(e), "calendar line")
+
+private fun openWeather(activity: Activity) {
+    val pkg = Prefs.weatherApp
+    val intent = (if (pkg.isNotEmpty()) activity.packageManager.getLaunchIntentForPackage(pkg) else null)
+        ?: Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=weather"))
+    openIntentAfterUnlock(activity, intent, "weather")
+}
+
+/** Same rules as opening an app from a notification: unlock first (face, fingerprint or PIN), then open it. */
+private fun openIntentAfterUnlock(activity: Activity, intent: Intent, what: String) {
+    AodLog.add("Triple-tap on the $what")
     val km = activity.getSystemService(KeyguardManager::class.java)
-    val intent = CalendarRepo.viewIntent(e).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     fun start() {
         try {
             activity.startActivity(intent)
         } catch (ex: Exception) {
-            AodLog.add("Could not open the calendar: ${ex.message}")
+            AodLog.add("Could not open $what: ${ex.message}")
         }
         activity.finish()
     }
@@ -690,4 +715,30 @@ private fun iconTint(n: NotifItem, selected: Boolean, accent: Color, dim: Color)
     }
     2 -> if (n.appIcon != null) null else ColorFilter.tint(if (selected) accent else dim)
     else -> ColorFilter.tint(if (selected) accent else dim)
+}
+
+/** One, two or three taps do different things. Acts about half a second after the last tap. */
+private fun Modifier.multiTap(onSingle: () -> Unit, onDouble: () -> Unit, onTriple: () -> Unit): Modifier = composed {
+    val single by rememberUpdatedState(onSingle)
+    val double by rememberUpdatedState(onDouble)
+    val triple by rememberUpdatedState(onTriple)
+    val scope = rememberCoroutineScope()
+    val count = remember { IntArray(1) }
+    val job = remember { arrayOfNulls<Job>(1) }
+    pointerInput(Unit) {
+        detectTapGestures(onTap = {
+            count[0]++
+            job[0]?.cancel()
+            job[0] = scope.launch {
+                delay(450)
+                val c = count[0]
+                count[0] = 0
+                when {
+                    c >= 3 -> triple()
+                    c == 2 -> double()
+                    else -> single()
+                }
+            }
+        })
+    }
 }

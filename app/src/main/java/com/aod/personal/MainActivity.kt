@@ -131,6 +131,7 @@ private fun SettingsScreen() {
 
     var enabled by remember { mutableStateOf(Prefs.enabled) }
     var showBlocked by remember { mutableStateOf(false) }
+    var showWeatherApp by remember { mutableStateOf(false) }
 
     // Never leave the AOD switched on if setup has broken (e.g. a permission revoked).
     LaunchedEffect(tick) {
@@ -288,7 +289,21 @@ private fun SettingsScreen() {
         item { SwitchRow("Use °F", Prefs.fahrenheit) { Prefs.fahrenheit = it } }
         item {
             var style by remember { mutableIntStateOf(Prefs.weatherStyle) }
-            Chips("Weather detail", listOf("Short", "With description", "Full"), style) { style = it; Prefs.weatherStyle = it }
+            Chips("Weather detail", listOf("Temp only", "With description", "Full"), style) { style = it; Prefs.weatherStyle = it }
+        }
+        item {
+            val appLabel = remember(tick, showWeatherApp) {
+                val pkg = Prefs.weatherApp
+                if (pkg.isEmpty()) "Google weather (browser)" else try {
+                    ctx.packageManager.getApplicationLabel(ctx.packageManager.getApplicationInfo(pkg, 0)).toString()
+                } catch (e: Exception) {
+                    "Google weather (browser)"
+                }
+            }
+            Column {
+                Text("Tap the weather on the AOD for full detail, double-tap to refresh, triple-tap to open the forecast.", style = MaterialTheme.typography.bodySmall)
+                OutlinedButton({ showWeatherApp = true }) { Text("Forecast opens in: $appLabel") }
+            }
         }
         item {
             var lat by remember { mutableStateOf(Prefs.lat) }
@@ -332,7 +347,7 @@ private fun SettingsScreen() {
         }
         item { SwitchRow("Go black when face-down or in pocket", Prefs.hideCovered) { Prefs.hideCovered = it } }
         item { SwitchRow("Power button turns the screen fully off (otherwise the AOD comes straight back)", Prefs.powerOff) { Prefs.powerOff = it } }
-        item { Text("Tap an icon (e.g. WhatsApp) to show its text. Triple-tap an icon or its text to open that app (swipe the text sideways to clear it). Triple-tap the clock to go to your home screen. Triple-tap the calendar line to open that appointment, or swipe it away. Double-tap the weather to refresh it. Taps anywhere else do nothing, so the pocket is safe.", style = MaterialTheme.typography.bodySmall) }
+        item { Text("Tap an icon (e.g. WhatsApp) to show its text. Triple-tap an icon or its text to open that app (swipe the text sideways to clear it). Triple-tap the clock to go to your home screen. Triple-tap the calendar line to open that appointment, or swipe it away. Tap the weather for full detail, double-tap to refresh it, triple-tap to open the forecast. Taps anywhere else do nothing, so the pocket is safe.", style = MaterialTheme.typography.bodySmall) }
 
         item { Header("Diagnostics") }
         item {
@@ -371,6 +386,7 @@ private fun SettingsScreen() {
     }
 
     if (showBlocked) BlockedAppsDialog { showBlocked = false }
+    if (showWeatherApp) WeatherAppDialog { showWeatherApp = false }
 }
 
 @Composable
@@ -517,4 +533,41 @@ private fun ColorSetting(label: String, initial: Int, autoLabel: String, onChang
             onChange(c)
         }, valueRange = 0f..360f)
     }
+}
+
+
+@Composable
+private fun WeatherAppDialog(onClose: () -> Unit) {
+    val ctx = LocalContext.current
+    var apps by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        apps = withContext(Dispatchers.IO) {
+            val pm = ctx.packageManager
+            pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+                .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
+                .distinctBy { it.first }
+                .sortedBy { it.second.lowercase() }
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onClose,
+        confirmButton = { TextButton(onClose) { Text("Cancel") } },
+        title = { Text("Open the forecast in") },
+        text = {
+            LazyColumn {
+                item {
+                    TextButton({
+                        Prefs.weatherApp = ""
+                        onClose()
+                    }) { Text("Google weather (browser)") }
+                }
+                items(apps) { (pkg, label) ->
+                    TextButton({
+                        Prefs.weatherApp = pkg
+                        onClose()
+                    }) { Text(label) }
+                }
+            }
+        }
+    )
 }
