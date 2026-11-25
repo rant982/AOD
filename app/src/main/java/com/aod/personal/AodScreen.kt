@@ -14,6 +14,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import androidx.core.content.ContextCompat
 import android.graphics.BitmapFactory
 import android.os.BatteryManager
 import android.text.format.DateFormat
@@ -205,6 +206,20 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
         }
     }
 
+    // Night = Do Not Disturb is on. The backlight is lowered by the activity; here the clock, icons and text themselves are
+    // dimmed too, because lowering only the backlight can still look very bright on some phones.
+    var night by remember { mutableStateOf(isDndOn(ctx)) }
+    DisposableEffect(Unit) {
+        val r = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                night = isDndOn(c)
+            }
+        }
+        ContextCompat.registerReceiver(ctx, r, IntentFilter(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
+        onDispose { ctx.unregisterReceiver(r) }
+    }
+    val dimK = if (night && Prefs.nightDim) Prefs.nightContent.coerceIn(0.05f, 1f) else 1f
+
     // Pixel shift (burn-in protection): jump to a new random spot as soon as the AOD appears, then every 45 seconds.
     val density = LocalDensity.current
     var shift by remember { mutableStateOf(IntOffset.Zero) }
@@ -252,7 +267,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
             .drawBehind {
                 if (edge.value > 0f) drawRoundRect(
                     brush = Brush.sweepGradient(listOf(accent, Color.Cyan, Color.Magenta, accent)),
-                    alpha = edge.value,
+                    alpha = edge.value * dimK,
                     cornerRadius = CornerRadius(48.dp.toPx()),
                     style = Stroke(16.dp.toPx())
                 )
@@ -267,7 +282,8 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                 .fillMaxSize()
                 .systemBarsPadding()
                 .padding(24.dp)
-                .offset { shiftAnim },
+                .offset { shiftAnim }
+                .graphicsLayer { alpha = dimK },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(Prefs.blockGap.dp, Alignment.CenterVertically)
         ) {
@@ -724,4 +740,10 @@ private fun iconTint(n: NotifItem, selected: Boolean, accent: Color, dim: Color)
 private fun Modifier.onTapOnly(action: () -> Unit): Modifier = composed {
     val act by rememberUpdatedState(action)
     pointerInput(Unit) { detectTapGestures(onTap = { act() }) }
+}
+
+/** True while Do Not Disturb (any mode other than "allow all") is on. */
+fun isDndOn(c: Context): Boolean {
+    val f = c.getSystemService(NotificationManager::class.java).currentInterruptionFilter
+    return f != NotificationManager.INTERRUPTION_FILTER_ALL && f != NotificationManager.INTERRUPTION_FILTER_UNKNOWN
 }

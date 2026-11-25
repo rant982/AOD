@@ -56,6 +56,9 @@ object Prefs {
     var clockScale by F("clockScale", 1f)
     var nightDim by B("nightDim", true)
     var nightBrightness by F("nightBrightness", 0.03f)
+
+    /** At night (Do Not Disturb on) the clock, icons and text themselves are drawn at this fraction of full brightness. */
+    var nightContent by F("nightContent", 0.35f)
     var logoMode by I("logoMode", 0) // 0 none, 1 image, 2 text
     var logoText by S("logoText", "")
 

@@ -201,6 +201,7 @@ private fun SettingsScreen() {
                     Text("Last screen-off: ${AodState.lastEvent}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
                     Text("Service started: ${Prefs.lastStart.ifEmpty { "not yet" }}", style = MaterialTheme.typography.bodySmall)
                     Text("Pixel shift: ${AodState.shiftNote}", style = MaterialTheme.typography.bodySmall)
+                    Text("Night mode: ${if (isDndOn(ctx)) "ON (Do Not Disturb is on)" else "off (Do Not Disturb is off)"}", style = MaterialTheme.typography.bodySmall)
                     Text(
                         "After a phone restart, unlock once (Android requires it) and the AOD starts by itself. If it doesn't, allow Auto-launch / background activity for My AOD under App settings > Battery.",
                         style = MaterialTheme.typography.bodySmall,
@@ -265,6 +266,7 @@ private fun SettingsScreen() {
         item { Text("Daytime brightness follows your phone's brightness setting (including automatic).", style = MaterialTheme.typography.bodySmall) }
         item { SwitchRow("Dim at night when Do Not Disturb is on", Prefs.nightDim) { Prefs.nightDim = it } }
         item { SliderRow("Night brightness (left = dimmest that is still visible)", Prefs.nightBrightness.coerceAtLeast(0.02f), 0.02f..0.2f) { Prefs.nightBrightness = it } }
+        item { SliderRow("Night: how bright the clock and icons are (left = darker)", Prefs.nightContent, 0.1f..1f) { Prefs.nightContent = it } }
 
         item { Header("Screen order (top to bottom)") }
         item { OrderEditor() }
