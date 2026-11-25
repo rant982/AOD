@@ -23,6 +23,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -297,6 +298,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                     }
 
                     "NOTIFS" -> if (Prefs.showNotifs && notifs.isNotEmpty()) {
+                        val expandedPkg = notifs.firstOrNull { it.key == expanded }?.pkg
                         FlowRow(
                             Modifier.padding(top = 8.dp).fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally)
@@ -304,14 +306,17 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                             notifs.distinctBy { it.pkg }.take(24).forEach { n ->
                                 (if (Prefs.iconStyle == 2) (n.appIcon ?: n.icon) else n.icon)?.let {
                                     val flashing = n.pkg == flashPkg
+                                    val selected = n.pkg == expandedPkg
+                                    val count = notifs.count { x -> x.pkg == n.pkg }
+                                    Box(contentAlignment = Alignment.TopEnd) {
                                     Image(
                                         it.asImageBitmap(), null,
                                         Modifier
                                             .tapOrTriple(
-                                                onTap = { expanded = if (expanded == n.key) null else n.key },
+                                                onTap = { expanded = if (selected) null else n.key },
                                                 onTriple = { activity?.let { a -> openNotification(a, n) } } // triple-tap an icon to open its app
                                             )
-                                            .alpha(if (Prefs.iconStyle != 0 && expanded != n.key) 0.8f else 1f)
+                                            .alpha(if (Prefs.iconStyle != 0 && !selected) 0.8f else 1f)
                                             .padding(10.dp)
                                             .size(26.dp)
                                             .graphicsLayer {
@@ -319,8 +324,14 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                                 scaleX = 1f + 0.7f * k
                                                 scaleY = 1f + 0.7f * k
                                             },
-                                        colorFilter = if (flashing && Prefs.iconStyle == 0) ColorFilter.tint(Color.White) else iconTint(n, expanded == n.key, accent, dim)
+                                        colorFilter = if (flashing && Prefs.iconStyle == 0) ColorFilter.tint(Color.White) else iconTint(n, selected, accent, dim)
                                     )
+                                    // Several alerts from one app: show how many.
+                                    if (count > 1 && Prefs.showBadge) Text(
+                                        "$count", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(top = 4.dp, end = 4.dp).background(accent, CircleShape).padding(horizontal = 5.dp, vertical = 1.dp)
+                                    )
+                                    }
                                 }
                             }
                         }
@@ -334,8 +345,10 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                     maxLines = if (open) 12 else 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
                                     modifier = Modifier
                                         .swipeAway {
+                                            // Clears this one; the next alert from the same app (if any) comes up.
+                                            val next = notifs.firstOrNull { x -> x.pkg == n.pkg && x.key != n.key }?.key
                                             NotifService.dismiss(n.key)
-                                            if (expanded == n.key) expanded = null
+                                            if (expanded == n.key) expanded = next
                                         }
                                         .tapOrTriple(
                                             onTap = { expanded = n.key },
@@ -343,7 +356,24 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                         )
                                         .padding(vertical = 6.dp, horizontal = 8.dp)
                                 )
-                                if (open) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (open) FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    val same = notifs.filter { x -> x.pkg == n.pkg }
+                                    val pos = same.indexOfFirst { x -> x.key == n.key } + 1
+                                    HideChip("Clear this", dim) {
+                                        val next = same.firstOrNull { x -> x.key != n.key }?.key
+                                        NotifService.dismiss(n.key)
+                                        expanded = next
+                                    }
+                                    if (same.size > 1) {
+                                        HideChip("Clear all ${same.size}", dim) {
+                                            NotifService.dismissAll(same.map { x -> x.key })
+                                            expanded = null
+                                        }
+                                        HideChip("Next ($pos/${same.size})", dim, "›") { expanded = same[pos % same.size].key }
+                                    }
                                     HideChip("Never this app", dim) {
                                         Prefs.blocked = Prefs.blocked + n.pkg
                                         NotifService.refreshNow()
@@ -518,14 +548,14 @@ fun authenticateThen(activity: Activity, after: () -> Unit) {
 }
 
 @Composable
-private fun HideChip(label: String, color: Color, onClick: () -> Unit) {
+private fun HideChip(label: String, color: Color, symbol: String = "✕", onClick: () -> Unit) {
     Box(
         Modifier
             .border(1.dp, color.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
-        Text("✕ $label", color = color.copy(alpha = 0.8f), fontSize = 12.sp)
+        Text("$symbol $label", color = color.copy(alpha = 0.8f), fontSize = 12.sp)
     }
 }
 

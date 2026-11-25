@@ -75,6 +75,7 @@ object Prefs {
     var showPreview by B("alwaysPreview", false)
     var edgeLight by B("edgeLight", true)
     var flashIcon by B("flashIcon", true)
+    var showBadge by B("showBadge", true)
     var blocked: Set<String>
         get() = sp.getStringSet("blocked", emptySet())!!.toSet()
         set(v) = sp.edit().putStringSet("blocked", v).apply()

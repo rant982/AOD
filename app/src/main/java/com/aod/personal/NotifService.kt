@@ -24,6 +24,14 @@ class NotifService : NotificationListenerService() {
             instance?.refresh(false)
         }
 
+        /** Clears several notifications at once (all alerts from one app). */
+        fun dismissAll(keys: List<String>) {
+            try {
+                instance?.cancelNotifications(keys.toTypedArray())
+            } catch (e: Exception) {
+            }
+        }
+
         fun dismiss(key: String) {
             try {
                 instance?.cancelNotification(key)
