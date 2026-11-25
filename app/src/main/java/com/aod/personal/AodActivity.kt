@@ -172,7 +172,10 @@ class AodActivity : ComponentActivity(), SensorEventListener {
     /** Day: follow the system brightness (auto or manual). Do Not Disturb: night level. */
     private fun applyBrightness() {
         val lp = window.attributes
-        lp.screenBrightness = if (Prefs.nightDim && isDnd()) Prefs.nightBrightness else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        // Never 0: on some phones "lowest" is dark enough to look switched off. 0.02 is dim but still a readable clock.
+        val night = Prefs.nightDim && isDnd()
+        lp.screenBrightness = if (night) Prefs.nightBrightness.coerceAtLeast(0.02f) else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        AodLog.add("brightness night=$night value=${lp.screenBrightness}")
         window.attributes = lp
     }
 

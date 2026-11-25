@@ -263,7 +263,7 @@ private fun SettingsScreen() {
         item { SliderRow("Spacing between items", Prefs.blockGap, 0f..60f) { Prefs.blockGap = it } }
         item { Text("Daytime brightness follows your phone's brightness setting (including automatic).", style = MaterialTheme.typography.bodySmall) }
         item { SwitchRow("Dim at night when Do Not Disturb is on", Prefs.nightDim) { Prefs.nightDim = it } }
-        item { SliderRow("Night brightness (left = lowest)", Prefs.nightBrightness, 0f..0.2f) { Prefs.nightBrightness = it } }
+        item { SliderRow("Night brightness (left = dimmest that is still visible)", Prefs.nightBrightness.coerceAtLeast(0.02f), 0.02f..0.2f) { Prefs.nightBrightness = it } }
 
         item { Header("Screen order (top to bottom)") }
         item { OrderEditor() }
@@ -465,7 +465,7 @@ private fun OrderEditor() {
         Prefs.order = l.joinToString(",")
     }
     Column {
-        Text("Use the arrows to move items. Items you've switched off don't show. Battery and weather share a line when they're next to each other.", style = MaterialTheme.typography.bodySmall)
+        Text("Use the arrows to move items. Items you've switched off don't show.", style = MaterialTheme.typography.bodySmall)
         order.forEachIndexed { i, key ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("${i + 1}.  ${blockLabel(key)}", Modifier.weight(1f))

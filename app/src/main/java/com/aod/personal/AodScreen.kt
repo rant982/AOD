@@ -1,6 +1,7 @@
 package com.aod.personal
 
 import android.app.Activity
+import android.app.NotificationManager
 import android.hardware.biometrics.BiometricManager
 import android.hardware.biometrics.BiometricPrompt
 import android.os.CancellationSignal
@@ -186,10 +187,13 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
             else -> 24 to 48
         }
         while (true) {
-            val dx = with(density) { Random.nextInt(-hx, hx + 1).dp.roundToPx() }
+            val nm = ctx.getSystemService(NotificationManager::class.java)
+            val night = nm.currentInterruptionFilter.let { it != NotificationManager.INTERRUPTION_FILTER_ALL && it != NotificationManager.INTERRUPTION_FILTER_UNKNOWN }
+            // By day it only moves up and down (sideways looks untidy); at night it moves sideways too.
+            val dx = if (night) with(density) { Random.nextInt(-hx, hx + 1).dp.roundToPx() } else 0
             val dy = with(density) { Random.nextInt(-vy, vy + 1).dp.roundToPx() }
             shift = IntOffset(dx, dy)
-            AodState.shiftNote = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()) + "  moved to ($dx, $dy) px"
+            AodState.shiftNote = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()) + "  moved to ($dx, $dy) px (${if (night) "night: up/down and sideways" else "day: up/down only"})"
             delay(45_000)
         }
     }
@@ -279,22 +283,9 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                         Line(SimpleDateFormat(pattern, Locale.getDefault()).format(Date(now)), infoC, 18)
                     }
 
-                    // Battery and weather share one line when they sit next to each other in the order.
-                    "BATTERY", "WEATHER" -> {
-                        val prev = order.getOrNull(idx - 1)
-                        val next = order.getOrNull(idx + 1)
-                        val prevIsPair = prev == "BATTERY" || prev == "WEATHER"
-                        if (!prevIsPair) {
-                            val first = if (key == "BATTERY") batteryText else weatherText
-                            val second = when (next) {
-                                "BATTERY" -> batteryText
-                                "WEATHER" -> weatherText
-                                else -> null
-                            }
-                            val line = listOfNotNull(first, second).joinToString("   ")
-                            if (line.isNotEmpty()) Line(line, infoC, 16)
-                        }
-                    }
+                    "BATTERY" -> batteryText?.let { Line(it, infoC, 16) }
+
+                    "WEATHER" -> weatherText?.let { Line(it, infoC, 16) }
 
                     "CALENDAR" -> event?.takeIf { Prefs.showCalendar }?.let {
                         val time = if (it.begin <= now) "Now" else SimpleDateFormat(if (Prefs.use24h) "HH:mm" else "h:mm a", Locale.getDefault()).format(Date(it.begin))

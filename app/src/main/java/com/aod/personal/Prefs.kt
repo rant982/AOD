@@ -55,7 +55,7 @@ object Prefs {
     var sat by F("sat", 0f)
     var clockScale by F("clockScale", 1f)
     var nightDim by B("nightDim", true)
-    var nightBrightness by F("nightBrightness", 0f)
+    var nightBrightness by F("nightBrightness", 0.03f)
     var logoMode by I("logoMode", 0) // 0 none, 1 image, 2 text
     var logoText by S("logoText", "")
 

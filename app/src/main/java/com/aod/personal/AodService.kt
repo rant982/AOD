@@ -124,6 +124,7 @@ class AodService : Service() {
         }
         Prefs.lastStart = java.text.SimpleDateFormat("EEE d MMM HH:mm", java.util.Locale.getDefault()).format(java.util.Date()) + " ($why)"
         AodLog.add("service started $why (${if (intent == null) "system restart, no intent" else "explicit start"})")
+        WatchdogReceiver.schedule(this)
         return START_STICKY
     }
 
