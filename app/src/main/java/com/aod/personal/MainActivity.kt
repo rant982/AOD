@@ -126,7 +126,8 @@ private fun SettingsScreen() {
 
     val checks = remember(tick) { Requirements.checks(ctx) }
     val missing = checks.filter { it.required && !it.ok }
-    val ready = missing.isEmpty()
+    val ready = missing.isEmpty() // green only when EVERYTHING required is done, including the steps the user confirms by hand
+    val canRun = missing.none { it.blocksService } // what actually stops the AOD: a missing permission, not an unconfirmed step
     val running = remember(tick) { AodService.running }
 
     var enabled by remember { mutableStateOf(Prefs.enabled) }
@@ -135,17 +136,17 @@ private fun SettingsScreen() {
 
     // Never leave the AOD switched on if setup has broken (e.g. a permission revoked).
     LaunchedEffect(tick) {
-        if (Prefs.enabled && !ready) {
+        if (Prefs.enabled && !canRun) {
             Prefs.enabled = false
             enabled = false
             ctx.stopService(Intent(ctx, AodService::class.java))
-        } else if (Prefs.enabled && ready && !AodService.running) {
+        } else if (Prefs.enabled && canRun && !AodService.running) {
             ContextCompat.startForegroundService(ctx, Intent(ctx, AodService::class.java))
         }
     }
 
     val checklist: LazyListScope.() -> Unit = {
-        for ((level, title) in listOf(0 to "Required: the app will not run without these", 1 to "Recommended", 2 to "Optional features")) {
+        for ((level, title) in listOf(0 to "Required setup (this must all be done before setup shows green)", 1 to "Recommended", 2 to "Optional features")) {
             val group = checks.filter { it.level == level }
             if (group.isEmpty()) continue
             item { Header(title) }
@@ -155,7 +156,26 @@ private fun SettingsScreen() {
                         Text((if (c.ok) "✅ " else if (c.required) "⛔ " else "⚠️ ") + c.title)
                         Text(c.why, style = MaterialTheme.typography.bodySmall)
                     }
-                    if (!c.ok && (c.permission != null || c.intent != null)) Column(
+                    if (c.manualKey != null) Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (!c.ok && c.intents.isNotEmpty()) Button({
+                            // Phone-maker settings pages differ between models: try each, ending with this app's own settings page.
+                            for (i in c.intents) {
+                                try {
+                                    ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                    break
+                                } catch (e: Exception) {
+                                }
+                            }
+                        }) { Text(c.fixLabel) }
+                        OutlinedButton({
+                            val key = c.manualKey
+                            Prefs.confirmedSteps = if (c.ok) Prefs.confirmedSteps - key else Prefs.confirmedSteps + key
+                            tick++
+                        }) { Text(if (c.ok) "Undo" else "I've done this") }
+                    } else if (!c.ok && (c.permission != null || c.intent != null)) Column(
                         horizontalAlignment = Alignment.End,
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
@@ -183,7 +203,8 @@ private fun SettingsScreen() {
         }
         item {
             val (bg, head, body) = when {
-                !ready -> Triple(Color(0xFF5C1A1A), "⛔ AOD can't run yet", "Fix the ${missing.size} required item${if (missing.size == 1) "" else "s"} below. Until then it stays switched off.")
+                !canRun -> Triple(Color(0xFF5C1A1A), "⛔ AOD can't run yet", "Fix the ${missing.count { it.blocksService }} required item${if (missing.count { it.blocksService } == 1) "" else "s"} below. Until then it stays switched off.")
+                !ready -> Triple(Color(0xFF5A4A16), "⚠️ Setup isn't finished: ${missing.size} step${if (missing.size == 1) "" else "s"} left", "The AOD can run, but your phone may stop it overnight until these are done. They're listed below.")
                 !enabled -> Triple(Color(0xFF1F3D2B), "✅ All required checks passed", "Turn on \"Enable always-on display\" below.")
                 running -> Triple(Color(0xFF1F3D2B), "✅ All required checks passed", "AOD is running. Switch the screen off and it should appear. Use the lock test below to confirm.")
                 else -> Triple(Color(0xFF5A4A16), "⚠️ Enabled, but the service isn't running", "Switch Enable off and on again.")
@@ -225,14 +246,14 @@ private fun SettingsScreen() {
                     val i = Intent(ctx, AodService::class.java)
                     if (it) ContextCompat.startForegroundService(ctx, i) else ctx.stopService(i)
                     tick++
-                }, enabled = ready || enabled)
+                }, enabled = canRun || enabled)
             }
         }
         item {
             Column {
                 Button(
                     { lockPhone(ctx) },
-                    enabled = ready && enabled && running
+                    enabled = canRun && enabled && running
                 ) { Text("Lock test: lock phone now") }
                 Text(
                     "Locks the phone right now. The AOD should appear within a second and a quick double-tap on the clock should show your lock screen, where face or fingerprint work. If the screen stays off, check \"Last screen-off\" above.",

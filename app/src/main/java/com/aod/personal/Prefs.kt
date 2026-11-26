@@ -46,6 +46,11 @@ object Prefs {
 
     var enabled by B("enabled", false)
 
+    /** Setup steps the app cannot detect, which the user has confirmed doing ("autostart", "bgpower", "recentslock"). */
+    var confirmedSteps: Set<String>
+        get() = sp.getStringSet("confirmedSteps", emptySet())!!.toSet()
+        set(v) = sp.edit().putStringSet("confirmedSteps", v).apply()
+
     /** Written every ~10 seconds while the AOD is showing; 0 when it was closed on purpose. Lets a restarted app resume at once. */
     var aodHeartbeat by L("aodHeartbeat", 0L)
     var lastStart by S("lastStart", "")

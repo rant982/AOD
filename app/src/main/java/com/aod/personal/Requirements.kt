@@ -27,7 +27,11 @@ class Check(
     val extraIntent: Intent? = null,
     val extraLabel: String? = null,
     /** false: still shown as required in the app, but never stops the background service starting. */
-    val blocksService: Boolean = true
+    val blocksService: Boolean = true,
+    /** Set for steps Android can't detect: the user confirms them by hand ("I've done this"). */
+    val manualKey: String? = null,
+    /** Tried in order when the user taps the fix button (phone-maker settings pages differ between models). */
+    val intents: List<Intent> = emptyList()
 ) {
     val required get() = level == 0
 }
@@ -80,10 +84,51 @@ object Requirements {
             Build.VERSION.SDK_INT < 33 || granted(ctx, Manifest.permission.POST_NOTIFICATIONS), 1,
             permission = Manifest.permission.POST_NOTIFICATIONS
         )
+        // Battery: the one thing Android lets us check (Android's own setting, and background restriction).
+        val restricted = try {
+            ctx.getSystemService(android.app.ActivityManager::class.java).isBackgroundRestricted
+        } catch (e: Exception) {
+            false
+        }
         l += Check(
-            "Unrestricted battery", "Stops Android from killing the AOD in the background.",
-            ctx.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(ctx.packageName), 1,
-            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}"))
+            "Battery: no restrictions", "Stops Android from limiting or killing the AOD in the background.",
+            ctx.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(ctx.packageName) && !restricted, 0,
+            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}")),
+            blocksService = false
+        )
+
+        // Phone-maker settings (Vivo, Oppo, Xiaomi, Samsung...) can still stop the app. Android can't see them, so the user confirms.
+        val maker = Build.MANUFACTURER.lowercase()
+        val vivo = maker.contains("vivo") || maker.contains("iqoo")
+        val details = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}"))
+        fun comp(pkg: String, cls: String) = Intent().setComponent(ComponentName(pkg, cls))
+        val confirmed = Prefs.confirmedSteps
+        l += Check(
+            "Phone's own battery manager: allow high background power",
+            if (vivo) "Vivo's battery manager can still stop the app. Settings > Battery > Background power consumption management > My AOD > Allow high background power consumption. Then tap I've done this."
+            else "Your phone maker's battery manager can still stop the app. Allow unrestricted or high background power for My AOD. Then tap I've done this.",
+            "bgpower" in confirmed, 0, null, null, "Open settings", null, null, false, "bgpower",
+            if (vivo) listOf(
+                comp("com.vivo.abe", "com.vivo.applicationbehaviorengine.ui.ExcessivePowerManagerActivity"),
+                comp("com.iqoo.powersaving", "com.iqoo.powersaving.PowerSavingManagerActivity"),
+                details
+            ) else listOf(details)
+        )
+        l += Check(
+            "Autostart: allow My AOD to start by itself",
+            if (vivo) "Settings > Apps > Autostart (or iManager > App manager > Autostart) > turn on My AOD. Then tap I've done this."
+            else "Allow My AOD to start by itself / run in the background in your phone's app settings. Then tap I've done this.",
+            "autostart" in confirmed, 0, null, null, "Open settings", null, null, false, "autostart",
+            if (vivo) listOf(
+                comp("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"),
+                comp("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.BgStartUpManager"),
+                details
+            ) else listOf(details)
+        )
+        l += Check(
+            "Locked in Recents",
+            "Open the Recents screen, then press and hold (or pull down on) the My AOD card and choose Lock. This stops the phone clearing it. Then tap I've done this.",
+            "recentslock" in confirmed, 0, null, null, "Fix", null, null, false, "recentslock"
         )
         l += Check(
             "Proximity sensor", "Detects pocket or face-down so the screen goes black and ignores touches. Your phone has none if this fails.",
