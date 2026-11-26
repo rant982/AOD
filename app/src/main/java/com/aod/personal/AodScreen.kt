@@ -145,6 +145,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
     }
     // Weather: tap once = full detail and a fresh forecast; tap again (within 10 seconds) = open the forecast.
     var weatherExpanded by remember { mutableStateOf(false) }
+    var batteryExpanded by remember { mutableStateOf(false) }
     LaunchedEffect(weatherExpanded) {
         if (weatherExpanded) {
             delay(10_000)
@@ -299,7 +300,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
             val infoC = colorOr(Prefs.infoColor, dim)
             // Battery current (like the Ampere app) and charging type, re-read every minute.
             val bat = remember(now, battery) { batteryInfo(ctx) }
-            val batteryText = if (Prefs.showBattery && battery.first >= 0) batteryLine(battery.first, battery.second, bat, Prefs.showMilliamps) else null
+            val batteryText = if (Prefs.showBattery && battery.first >= 0) batteryLine(battery.first, battery.second, bat, Prefs.showMilliamps, batteryExpanded) else null
             val weatherText = weather?.takeIf { Prefs.showWeather }?.let { WeatherRepo.format(it, Prefs.fahrenheit, if (weatherExpanded) 2 else Prefs.weatherStyle) }
 
             // Blocks are drawn in the order chosen in Settings.
@@ -338,7 +339,10 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                         Line(SimpleDateFormat(pattern, Locale.getDefault()).format(Date(now)), infoC, 18)
                     }
 
-                    "BATTERY" -> batteryText?.let { Line(it, infoC, 16) }
+                    // Just the percentage; tap once for the charging detail, tap again to hide it.
+                    "BATTERY" -> batteryText?.let {
+                        Line(it, infoC, 16, Modifier.onTapOnly { batteryExpanded = !batteryExpanded }.padding(vertical = 4.dp))
+                    }
 
                     "WEATHER" -> weatherText?.let { w ->
                         Line(
@@ -796,7 +800,7 @@ fun batteryInfo(ctx: Context): BatInfo {
  * One symbol for the state: 🔋 on battery or full, 🐢 slow (under 1000 mA), 🔌 normal, ⚡ fast (3000 mA+), 🚀 super fast (6000 mA+).
  * Then the percentage and the signed current, e.g. "⚡ 67%  +3450 mA" or "🔋 100%  -420 mA".
  */
-fun batteryLine(level: Int, charging: Boolean, b: BatInfo, showMa: Boolean): String {
+fun batteryLine(level: Int, charging: Boolean, b: BatInfo, showMa: Boolean, expanded: Boolean = true): String {
     val ma = b.ma
     val symbol = when {
         !charging || b.full -> "🔋"
@@ -807,6 +811,7 @@ fun batteryLine(level: Int, charging: Boolean, b: BatInfo, showMa: Boolean): Str
         abs(ma) < 6000 -> "⚡"
         else -> "🚀"
     }
+    if (!expanded) return "$symbol $level%"
     val current = if (showMa && ma != null) "  " + (if (ma == 0) "0" else String.format(Locale.US, "%+d", ma)) + " mA" else ""
     val wireless = if (charging && b.wireless) "  wireless" else ""
     return "$symbol $level%$current$wireless"
