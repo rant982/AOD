@@ -660,7 +660,7 @@ private fun SettingsPreview() {
             t++
         }
     }
-    @Suppress("UNUSED_VARIABLE") val repaint = t // read it so this redraws a few times a second and picks up the new settings
+    @Suppress("UNUSED_VARIABLE") val repaint = t + UiTick.n // redraw at once when any setting changes (and a few times a second as a backstop)
     val accent = Color.hsv(Prefs.hue, Prefs.sat, 1f)
     val dim = accent.copy(alpha = 0.65f)
     val hourC = colorOr(Prefs.clockColor, accent)
@@ -691,6 +691,27 @@ private fun SettingsPreview() {
                 fontFamily = family, fontSize = (54 * Prefs.clockScale).sp
             )
             Text("Thursday 26 November   🔋 99%  -420 mA", color = infoC, fontSize = 11.sp)
+
+            // Which colour is which, and which of them still follow the main colour.
+            val showLogo = Prefs.logoMode == 2 && Prefs.logoText.isNotBlank()
+            Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("● Main", color = accent, fontSize = 10.sp)
+                Text("● Hours", color = hourC, fontSize = 10.sp)
+                Text("● Minutes", color = minC, fontSize = 10.sp)
+                if (showLogo) Text("● Logo", color = colorOr(Prefs.logoColor, accent.copy(alpha = 0.8f)), fontSize = 10.sp)
+                Text("● Info", color = infoC, fontSize = 10.sp)
+            }
+            val follows = listOfNotNull(
+                if (Prefs.clockColor == 0) "hours" else null,
+                if (Prefs.clockMinColor == 0) "minutes" else null,
+                if (showLogo && Prefs.logoColor == 0) "logo" else null,
+                if (Prefs.infoColor == 0) "info lines" else null
+            )
+            Text(
+                if (follows.isEmpty()) "Hue and Strength change nothing right now: each part has its own colour. Press 'Same as main colour' or 'Automatic' to make it follow again."
+                else "Hue and Strength currently change: ${follows.joinToString(", ")}.",
+                color = Color.Gray, fontSize = 10.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
         }
     }
 }

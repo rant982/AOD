@@ -2,8 +2,16 @@ package com.aod.personal
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
+
+/** Goes up by one whenever any setting changes, so a screen that reads it redraws at once (used by the settings preview). */
+object UiTick {
+    var n by mutableIntStateOf(0)
+}
 
 object Prefs {
     private lateinit var sp: SharedPreferences
@@ -15,23 +23,38 @@ object Prefs {
 
     private class B(val k: String, val d: Boolean) : ReadWriteProperty<Any?, Boolean> {
         override fun getValue(thisRef: Any?, property: KProperty<*>) = sp.getBoolean(k, d)
-        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Boolean) = sp.edit().putBoolean(k, value).apply()
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Boolean) {
+            sp.edit().putBoolean(k, value).apply()
+            UiTick.n++
+        }
     }
     private class I(val k: String, val d: Int) : ReadWriteProperty<Any?, Int> {
         override fun getValue(thisRef: Any?, property: KProperty<*>) = sp.getInt(k, d)
-        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Int) = sp.edit().putInt(k, value).apply()
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Int) {
+            sp.edit().putInt(k, value).apply()
+            UiTick.n++
+        }
     }
     private class F(val k: String, val d: Float) : ReadWriteProperty<Any?, Float> {
         override fun getValue(thisRef: Any?, property: KProperty<*>) = sp.getFloat(k, d)
-        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Float) = sp.edit().putFloat(k, value).apply()
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Float) {
+            sp.edit().putFloat(k, value).apply()
+            UiTick.n++
+        }
     }
     private class L(val k: String, val d: Long) : ReadWriteProperty<Any?, Long> {
         override fun getValue(thisRef: Any?, property: KProperty<*>) = sp.getLong(k, d)
-        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Long) = sp.edit().putLong(k, value).apply()
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Long) {
+            sp.edit().putLong(k, value).apply()
+            UiTick.n++
+        }
     }
     private class S(val k: String, val d: String) : ReadWriteProperty<Any?, String> {
         override fun getValue(thisRef: Any?, property: KProperty<*>) = sp.getString(k, d) ?: d
-        override fun setValue(thisRef: Any?, property: KProperty<*>, value: String) = sp.edit().putString(k, value).apply()
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: String) {
+            sp.edit().putString(k, value).apply()
+            UiTick.n++
+        }
     }
 
     val ALL_BLOCKS = listOf("LOGO", "CLOCK", "DATE", "BATTERY", "WEATHER", "CALENDAR", "MUSIC", "NOTIFS")
