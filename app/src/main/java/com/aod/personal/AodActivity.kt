@@ -189,7 +189,10 @@ class AodActivity : ComponentActivity(), SensorEventListener {
 
     private fun updateCovered() {
         val c = Prefs.hideCovered && ((hasProx && !proxSeen) || near || down)
-        if (c != covered) AodLog.add("covered=$c near=$near faceDown=$down proxSeen=$proxSeen")
+        if (c != covered) {
+            AodLog.add("covered=$c near=$near faceDown=$down proxSeen=$proxSeen")
+            if (!c) uncoveredAt = System.currentTimeMillis()
+        }
         covered = c
     }
 
@@ -269,6 +272,15 @@ class AodActivity : ComponentActivity(), SensorEventListener {
         super.onUserLeaveHint()
     }
 
+    // Pocket guard: touches are ignored while the phone is covered or face-down, for 1.2 seconds after it is uncovered
+    // (the moment it comes out of a pocket), in a "touch storm" (fabric or a palm rubbing the screen), and when more
+    // than one finger is down. This runs before anything on screen sees the touch.
+    private var uncoveredAt = 0L
+    private var touchLockUntil = 0L
+    private var gestureBlocked = false
+    private var gestureReachedContent = false
+    private val downTimes = ArrayDeque<Long>()
+
     private var tDown = 0L
     private var x0 = 0f
     private var y0 = 0f
@@ -293,6 +305,48 @@ class AodActivity : ComponentActivity(), SensorEventListener {
                 }
                 AodLog.add("touch ${if (e.actionMasked == MotionEvent.ACTION_UP) "up" else "cancel"} dx=${(e.rawX - x0).toInt()} dy=${(e.rawY - y0).toInt()} ${e.eventTime - tDown}ms $edge")
             }
+        }
+        if (Prefs.pocketGuard) {
+            val now = System.currentTimeMillis()
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    gestureBlocked = false
+                    gestureReachedContent = false
+                    var reason: String? = null
+                    if (covered) reason = "the phone is covered"
+                    else if (now < uncoveredAt + 1200) reason = "it was only just uncovered"
+                    else if (now < touchLockUntil) reason = "touch storm lock"
+                    else {
+                        downTimes.addLast(now)
+                        while (downTimes.isNotEmpty() && now - downTimes.first() > 3000) downTimes.removeFirst()
+                        if (downTimes.size >= 6) {
+                            touchLockUntil = now + 5000
+                            downTimes.clear()
+                            reason = "touch storm (fabric or a palm?), ignoring touches for 5 seconds"
+                        }
+                    }
+                    if (reason != null) {
+                        gestureBlocked = true
+                        AodLog.add("touch ignored: $reason")
+                    }
+                }
+                MotionEvent.ACTION_POINTER_DOWN -> if (!gestureBlocked) {
+                    gestureBlocked = true
+                    AodLog.add("touch ignored: more than one finger")
+                    if (gestureReachedContent) {
+                        // Tell the screen content the gesture is cancelled, so nothing is left half-done.
+                        val cancel = MotionEvent.obtain(e)
+                        cancel.action = MotionEvent.ACTION_CANCEL
+                        super.dispatchTouchEvent(cancel)
+                        cancel.recycle()
+                    }
+                }
+            }
+            if (gestureBlocked) {
+                if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) gestureBlocked = false
+                return true
+            }
+            if (e.actionMasked == MotionEvent.ACTION_DOWN) gestureReachedContent = true
         }
         return super.dispatchTouchEvent(e)
     }

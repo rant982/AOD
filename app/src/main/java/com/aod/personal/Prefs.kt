@@ -121,6 +121,9 @@ object Prefs {
     var powerOff by B("powerOff", false)
     var hideCovered by B("hideCovered", true)
 
+    /** Ignore every touch while covered, just after being uncovered, when rubbed by fabric, or with more than one finger. */
+    var pocketGuard by B("pocketGuard", true)
+
     // Weather cache
     var wTemp by F("wTemp", 0f)
     var wCode by I("wCode", -1)

@@ -352,6 +352,7 @@ private fun SettingsScreen() {
             Chips("Pixel shift distance", listOf("Small", "Medium", "Large"), amount) { amount = it; Prefs.shiftAmount = it }
         }
         item { SwitchRow("Go black when face-down or in pocket", Prefs.hideCovered) { Prefs.hideCovered = it } }
+        item { SwitchRow("Pocket guard: ignore all touches when covered, just pulled out, or rubbed by fabric or a palm", Prefs.pocketGuard) { Prefs.pocketGuard = it } }
         item { SwitchRow("Power button turns the screen fully off (otherwise the AOD comes straight back)", Prefs.powerOff) { Prefs.powerOff = it } }
         item {
             val tapWord = if (Prefs.openTaps == 2) "Double-tap" else "Triple-tap"
