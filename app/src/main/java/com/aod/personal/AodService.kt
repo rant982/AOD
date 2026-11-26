@@ -155,6 +155,7 @@ class AodService : Service() {
         }
         Prefs.lastStart = java.text.SimpleDateFormat("EEE d MMM HH:mm", java.util.Locale.getDefault()).format(java.util.Date()) + " ($why)"
         AodLog.add("service started $why (${if (intent == null) "system restart, no intent" else "explicit start"})")
+        IdleTimeout.apply(this, true)
         WatchdogReceiver.schedule(this)
         AodState.resumeAfterDeath(this)
         return START_STICKY
@@ -187,6 +188,7 @@ class AodService : Service() {
     override fun onDestroy() {
         running = false
         AodLog.add("service destroyed")
+        IdleTimeout.apply(this, false) // give the phone its own screen timeout back
         unregisterReceiver(screenReceiver)
         unregisterReceiver(unlockReceiver)
         handler.removeCallbacksAndMessages(null)

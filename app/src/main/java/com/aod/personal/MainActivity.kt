@@ -386,6 +386,29 @@ private fun SettingsScreen() {
             var taps by remember { mutableIntStateOf(Prefs.openTaps) }
             Chips("Taps to leave the AOD (clock, icons, calendar line)", listOf("2 taps", "3 taps"), taps - 2) { taps = it + 2; Prefs.openTaps = it + 2 }
         }
+        item {
+            // The AOD takes over when the phone's screen timeout ends, so this sets that timeout while the AOD is on.
+            var mins by remember { mutableIntStateOf(Prefs.idleMinutes) }
+            var allowed by remember { mutableStateOf(IdleTimeout.canWrite(ctx)) }
+            val opts = listOf(0, 1, 2, 3, 5)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Chips(
+                    "Switch to the AOD after no use for (the phone's own screen timeout while the AOD is on)",
+                    opts.map { if (it == 0) "Phone's setting" else "$it min" }, opts.indexOf(mins).coerceAtLeast(0)
+                ) {
+                    mins = opts[it]; Prefs.idleMinutes = mins
+                    IdleTimeout.apply(ctx, Prefs.enabled && AodService.running)
+                    tick++
+                }
+                if (mins > 0 && !allowed) {
+                    Text("This needs permission to change the screen timeout. Allow \"Modify system settings\" for My AOD, then come back.", style = MaterialTheme.typography.bodySmall)
+                    Button({
+                        ctx.startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${ctx.packageName}")))
+                    }) { Text("Allow") }
+                    OutlinedButton({ allowed = IdleTimeout.canWrite(ctx); IdleTimeout.apply(ctx, Prefs.enabled && AodService.running) }) { Text("I've allowed it") }
+                }
+            }
+        }
         item { SwitchRow("Pixel shift (burn-in protection)", Prefs.pixelShift) { Prefs.pixelShift = it } }
         item {
             var amount by remember { mutableIntStateOf(Prefs.shiftAmount) }

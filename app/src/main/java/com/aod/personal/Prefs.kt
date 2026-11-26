@@ -148,6 +148,11 @@ object Prefs {
     /** Taps needed on the clock / an icon / a calendar line to leave the AOD: 2 or 3. */
     var openTaps by I("openTaps", 2)
     var powerOff by B("powerOff", false)
+
+    /** Minutes of no use before the AOD takes over from the normal screen (0 = leave the phone's own screen timeout alone). */
+    var idleMinutes by I("idleMinutes", 0)
+    /** The phone's own screen timeout (ms) saved while we override it, -1 when not overriding. */
+    var origTimeout by I("origTimeout", -1)
     var hideCovered by B("hideCovered", true)
 
     /** Ignore every touch while covered, just after being uncovered, when rubbed by fabric, or with more than one finger. */
