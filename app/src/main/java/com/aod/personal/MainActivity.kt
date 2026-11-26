@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -60,12 +61,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -105,6 +108,7 @@ private fun saveLogo(ctx: Context, uri: Uri) {
     FileOutputStream(File(ctx.filesDir, "logo.png")).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SettingsScreen() {
     val ctx = LocalContext.current
@@ -265,6 +269,8 @@ private fun SettingsScreen() {
             OutlinedButton({ ctx.startActivity(Intent(ctx, AodActivity::class.java).putExtra("preview", true)) }) { Text("Preview (tap the clock ${Prefs.openTaps} times to close)") }
         }
 
+        stickyHeader { SettingsPreview() }
+
         // When anything required is missing the checklist sits right here; once all is well it moves to the bottom.
         if (!ready) checklist()
 
@@ -278,8 +284,7 @@ private fun SettingsScreen() {
             Chips("Font", listOf("Sans", "Serif", "Mono", "Script"), font) { font = it; Prefs.font = it }
         }
         item { SwitchRow("24-hour clock", Prefs.use24h) { Prefs.use24h = it } }
-        item { SliderRow("Colour", Prefs.hue, 0f..360f) { Prefs.hue = it } }
-        item { SliderRow("Colour saturation (left = white)", Prefs.sat, 0f..1f) { Prefs.sat = it } }
+        item { MainColourEditor() }
         item { ColorSetting("Time colour (hours)", Prefs.clockColor, "Same as main colour") { Prefs.clockColor = it } }
         item { ColorSetting("Minutes colour", Prefs.clockMinColor, "Automatic") { Prefs.clockMinColor = it } }
         item { SliderRow("Clock size", Prefs.clockScale, 0.6f..1.4f) { Prefs.clockScale = it } }
@@ -545,7 +550,7 @@ private val SWATCHES = listOf(
 @Composable
 private fun ColorSetting(label: String, initial: Int, autoLabel: String, onChange: (Int) -> Unit) {
     var cur by remember { mutableIntStateOf(initial) }
-    var hue by remember { mutableFloatStateOf(0f) }
+    var hue by remember { mutableFloatStateOf(hueOf(initial)) } // start where the current colour is, not always at the left
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, style = MaterialTheme.typography.bodySmall)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -611,4 +616,80 @@ private fun WeatherAppDialog(onClose: () -> Unit) {
             }
         }
     )
+}
+
+
+private fun hueOf(argb: Int): Float {
+    if (argb == 0) return 0f
+    val hsv = FloatArray(3)
+    android.graphics.Color.colorToHSV(argb, hsv)
+    return hsv[0]
+}
+
+/** The main colour: a swatch showing it, a Hue slider and a Strength slider, with a hint when Strength is at white. */
+@Composable
+private fun MainColourEditor() {
+    var hue by remember { mutableFloatStateOf(Prefs.hue) }
+    var sat by remember { mutableFloatStateOf(Prefs.sat) }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Main colour. This is the default for the clock, logo, info lines and mono icons. The specific colours further down override it.", style = MaterialTheme.typography.bodySmall)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.size(44.dp).background(Color.hsv(hue, sat, 1f), CircleShape).border(1.dp, Color.Gray, CircleShape))
+            Column(Modifier.weight(1f)) {
+                Text("Hue", style = MaterialTheme.typography.bodySmall)
+                Slider(hue, { hue = it; Prefs.hue = it }, valueRange = 0f..360f)
+                Text("Strength (left = plain white)", style = MaterialTheme.typography.bodySmall)
+                Slider(sat, { sat = it; Prefs.sat = it }, valueRange = 0f..1f)
+            }
+        }
+        if (sat < 0.05f) Text(
+            "Strength is at plain white, so Hue shows nothing yet. Slide Strength to the right.",
+            style = MaterialTheme.typography.bodySmall, color = Color(0xFFFFB74D)
+        )
+    }
+}
+
+/** A small live copy of the AOD (clock, logo, date, battery) that updates as you move the sliders. */
+@Composable
+private fun SettingsPreview() {
+    var t by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(250)
+            t++
+        }
+    }
+    @Suppress("UNUSED_VARIABLE") val repaint = t // read it so this redraws a few times a second and picks up the new settings
+    val accent = Color.hsv(Prefs.hue, Prefs.sat, 1f)
+    val dim = accent.copy(alpha = 0.65f)
+    val hourC = colorOr(Prefs.clockColor, accent)
+    val minC = when {
+        Prefs.clockMinColor != 0 -> Color(Prefs.clockMinColor)
+        Prefs.clockStyle == 0 -> hourC
+        else -> hourC.copy(alpha = 0.65f)
+    }
+    val infoC = colorOr(Prefs.infoColor, dim)
+    val family = when (Prefs.font) {
+        0 -> androidx.compose.ui.text.font.FontFamily.SansSerif
+        1 -> androidx.compose.ui.text.font.FontFamily.Serif
+        2 -> androidx.compose.ui.text.font.FontFamily.Monospace
+        else -> androidx.compose.ui.text.font.FontFamily.Cursive
+    }
+    val weightHour = if (Prefs.clockStyle == 0) androidx.compose.ui.text.font.FontWeight.Light else androidx.compose.ui.text.font.FontWeight.Bold
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.Black)) {
+        Column(Modifier.fillMaxWidth().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Live preview", color = Color.Gray, fontSize = 10.sp)
+            if (Prefs.logoMode == 2 && Prefs.logoText.isNotBlank()) {
+                Text(Prefs.logoText, color = colorOr(Prefs.logoColor, accent.copy(alpha = 0.8f)), fontSize = 13.sp)
+            }
+            Text(
+                androidx.compose.ui.text.buildAnnotatedString {
+                    androidx.compose.ui.text.withStyle(androidx.compose.ui.text.SpanStyle(color = hourC, fontWeight = weightHour)) { append("08") }
+                    androidx.compose.ui.text.withStyle(androidx.compose.ui.text.SpanStyle(color = minC, fontWeight = androidx.compose.ui.text.font.FontWeight.Light)) { append(":44") }
+                },
+                fontFamily = family, fontSize = (54 * Prefs.clockScale).sp
+            )
+            Text("Thursday 26 November   🔋 99%  -420 mA", color = infoC, fontSize = 11.sp)
+        }
+    }
 }
