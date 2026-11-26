@@ -762,10 +762,18 @@ fun batteryInfo(ctx: Context): BatInfo {
     } catch (e: Exception) {
         Int.MIN_VALUE
     }
-    val ma = if (raw == Int.MIN_VALUE) null else {
-        // Most phones report microamps; a few report milliamps. Real currents never reach 20,000 mA.
-        if (abs(raw.toLong()) >= 20_000L) raw / 1000 else raw
+    // Most phones report microamps; a few report milliamps. Real currents never reach 20,000 mA.
+    val magnitude = if (raw == Int.MIN_VALUE) null else abs(if (abs(raw.toLong()) >= 20_000L) raw / 1000 else raw)
+    // Phones disagree about the sign of that number (some report charging as negative), so the direction comes from the
+    // battery status instead: + while charging, - on battery, like the Ampere app.
+    val status = i?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+    val sign = when {
+        status == BatteryManager.BATTERY_STATUS_CHARGING -> 1
+        status == BatteryManager.BATTERY_STATUS_DISCHARGING -> -1
+        plugged != 0 -> 1 // full, or plugged in but not charging
+        else -> -1
     }
+    val ma = magnitude?.let { sign * it }
     return BatInfo(plugged == BatteryManager.BATTERY_PLUGGED_WIRELESS, full, ma)
 }
 
