@@ -287,6 +287,10 @@ private fun SettingsScreen() {
         item { ColorSetting("Info line colour (date, battery, weather, calendar, music)", Prefs.infoColor, "Automatic") { Prefs.infoColor = it } }
         item { SwitchRow("Date", Prefs.showDate) { Prefs.showDate = it } }
         item { SwitchRow("Battery", Prefs.showBattery) { Prefs.showBattery = it } }
+        item {
+            var detail by remember { mutableIntStateOf(Prefs.chargeDetail) }
+            Chips("Charging detail (🐢 slow, ⚡ normal, ⚡⚡ fast, ⚡⚡⚡ super fast; 🛜 wireless, 🔌 cable)", listOf("Icons", "Icons + watts"), detail) { detail = it; Prefs.chargeDetail = it }
+        }
         item { SwitchRow("Weather", Prefs.showWeather) { Prefs.showWeather = it } }
         item { SwitchRow("Use °F", Prefs.fahrenheit) { Prefs.fahrenheit = it } }
         item {

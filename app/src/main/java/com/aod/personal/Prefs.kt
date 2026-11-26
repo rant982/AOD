@@ -68,6 +68,7 @@ object Prefs {
     // Info lines
     var showDate by B("showDate", true)
     var showBattery by B("showBattery", true)
+    var chargeDetail by I("chargeDetail", 0) // 0 icons only, 1 icons and watts
     var showWeather by B("showWeather", true)
     var fahrenheit by B("fahrenheit", false)
     var lat by S("lat", "")
