@@ -450,7 +450,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                 ) {
                                     val same = notifs.filter { x -> x.pkg == n.pkg }
                                     val pos = same.indexOfFirst { x -> x.key == n.key } + 1
-                                    HideChip("Clear this", dim) {
+                                    HideChip("Clear this", dim, primary = true) {
                                         val next = same.firstOrNull { x -> x.key != n.key }?.key
                                         NotifService.dismiss(n.key)
                                         expanded = next
@@ -699,14 +699,21 @@ fun authenticateThen(activity: Activity, after: () -> Unit) {
 }
 
 @Composable
-private fun HideChip(label: String, color: Color, symbol: String = "✕", onClick: () -> Unit) {
+private fun HideChip(label: String, color: Color, symbol: String = "✕", primary: Boolean = false, onClick: () -> Unit) {
+    // The usual choice ("Clear this") is filled and bolder so it stands out from the rest.
+    val shape = RoundedCornerShape(16.dp)
     Box(
         Modifier
-            .border(1.dp, color.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+            .then(if (primary) Modifier.background(color.copy(alpha = 0.22f), shape) else Modifier)
+            .border(if (primary) 1.5.dp else 1.dp, color.copy(alpha = if (primary) 0.9f else 0.45f), shape)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = if (primary) 16.dp else 12.dp, vertical = if (primary) 8.dp else 6.dp)
     ) {
-        Text("$symbol $label", color = color.copy(alpha = 0.8f), fontSize = 12.sp)
+        Text(
+            "$symbol $label", color = color.copy(alpha = if (primary) 1f else 0.8f),
+            fontSize = if (primary) 14.sp else 12.sp,
+            fontWeight = if (primary) FontWeight.Bold else FontWeight.Normal
+        )
     }
 }
 
