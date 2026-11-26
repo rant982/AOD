@@ -399,6 +399,14 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                             .alpha(if (Prefs.iconStyle != 0 && !selected) 0.8f else 1f)
                                             .padding(10.dp)
                                             .size(26.dp)
+                                            .drawBehind {
+                                                // A white ring around the icon for the few seconds after a new alert.
+                                                if (flashing) drawCircle(
+                                                    Color.White.copy(alpha = 0.55f + 0.45f * flash.value),
+                                                    radius = size.minDimension / 2 + 7.dp.toPx(),
+                                                    style = Stroke(width = 2.5.dp.toPx())
+                                                )
+                                            }
                                             .graphicsLayer {
                                                 val k = if (flashing) flash.value else 0f
                                                 scaleX = 1f + 0.7f * k
