@@ -45,6 +45,9 @@ object Prefs {
     }
 
     var enabled by B("enabled", false)
+
+    /** Written every ~10 seconds while the AOD is showing; 0 when it was closed on purpose. Lets a restarted app resume at once. */
+    var aodHeartbeat by L("aodHeartbeat", 0L)
     var lastStart by S("lastStart", "")
 
     // Appearance

@@ -73,6 +73,24 @@ object AodState {
     }
 
     /**
+     * The phone ended and restarted the app while the AOD was showing (the AOD window dies with it, so the normal
+     * lock screen would show until the screen times out). Put the AOD straight back instead of waiting for that.
+     */
+    fun resumeAfterDeath(ctx: Context) {
+        val hb = Prefs.aodHeartbeat
+        val now = System.currentTimeMillis()
+        if (hb == 0L || now - hb > 30_000 || showing || now < suppressRelaunchUntil) return
+        val km = ctx.getSystemService(KeyguardManager::class.java)
+        val awake = ctx.getSystemService(PowerManager::class.java).isInteractive
+        if (!km.isKeyguardLocked || !awake || !android.provider.Settings.canDrawOverlays(ctx)) return
+        log("The phone restarted the app while the AOD was showing; brought the AOD straight back.")
+        ctx.startActivity(
+            Intent(ctx, AodActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+        )
+    }
+
+    /**
      * Brings the AOD back to the front if it was pushed aside or closed by the system while the phone is still
      * locked and awake. Never during calls, alarms or other full-screen notifications, and never more than
      * 6 times in 30 seconds.
@@ -115,8 +133,11 @@ class AodActivity : ComponentActivity(), SensorEventListener {
 
     /** Watchdog: if the phone is ever found unlocked while the AOD is up, lock it again. */
     private val guard = object : Runnable {
+        private var beats = 0
+
         override fun run() {
             ensureLocked()
+            if (++beats % 5 == 1) Prefs.aodHeartbeat = System.currentTimeMillis()
             handler.postDelayed(this, 2000)
         }
     }
@@ -238,6 +259,7 @@ class AodActivity : ComponentActivity(), SensorEventListener {
 
     override fun finish() {
         selfFinished = true
+        Prefs.aodHeartbeat = 0 // closed on purpose: do not resume it after a restart
         AodLog.add("AOD finish() called from: " + Throwable().stackTrace.drop(1).take(5).joinToString(" < ") { it.className.substringAfterLast('.') + "." + it.methodName })
         super.finish()
     }
