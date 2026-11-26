@@ -287,9 +287,12 @@ private fun SettingsScreen() {
         item { ColorSetting("Info line colour (date, battery, weather, calendar, music)", Prefs.infoColor, "Automatic") { Prefs.infoColor = it } }
         item { SwitchRow("Date", Prefs.showDate) { Prefs.showDate = it } }
         item { SwitchRow("Battery", Prefs.showBattery) { Prefs.showBattery = it } }
+        item { SwitchRow("Battery current in mA (+ charging, - on battery)", Prefs.showMilliamps) { Prefs.showMilliamps = it } }
         item {
-            var detail by remember { mutableIntStateOf(Prefs.chargeDetail) }
-            Chips("Charging detail (🐢 slow, ⚡ normal, ⚡⚡ fast, ⚡⚡⚡ super fast; 🛜 wireless, 🔌 cable)", listOf("Icons", "Icons + watts"), detail) { detail = it; Prefs.chargeDetail = it }
+            Text(
+                "Battery symbol: 🔋 on battery or full, 🐢 slow charging (under 1000 mA), 🔌 normal, ⚡ fast (3000 mA+), 🚀 super fast (6000 mA+). \"wireless\" is added when charging wirelessly.",
+                style = MaterialTheme.typography.bodySmall
+            )
         }
         item { SwitchRow("Weather", Prefs.showWeather) { Prefs.showWeather = it } }
         item { SwitchRow("Use °F", Prefs.fahrenheit) { Prefs.fahrenheit = it } }

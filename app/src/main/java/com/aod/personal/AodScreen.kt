@@ -297,9 +297,9 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                 else -> hourC.copy(alpha = 0.65f)
             }
             val infoC = colorOr(Prefs.infoColor, dim)
-            // How the phone is charging (wired or wireless) and roughly how fast, re-read every minute.
-            val charge = remember(now, battery) { if (battery.second) chargeInfo(ctx) else null }
-            val batteryText = if (Prefs.showBattery && battery.first >= 0) chargeText(battery.first, battery.second, charge, Prefs.chargeDetail) else null
+            // Battery current (like the Ampere app) and charging type, re-read every minute.
+            val bat = remember(now, battery) { batteryInfo(ctx) }
+            val batteryText = if (Prefs.showBattery && battery.first >= 0) batteryLine(battery.first, battery.second, bat, Prefs.showMilliamps) else null
             val weatherText = weather?.takeIf { Prefs.showWeather }?.let { WeatherRepo.format(it, Prefs.fahrenheit, if (weatherExpanded) 2 else Prefs.weatherStyle) }
 
             // Blocks are drawn in the order chosen in Settings.
@@ -750,44 +750,41 @@ fun isDndOn(c: Context): Boolean {
     return f != NotificationManager.INTERRUPTION_FILTER_ALL && f != NotificationManager.INTERRUPTION_FILTER_UNKNOWN
 }
 
-/** source: BatteryManager.BATTERY_PLUGGED_* ; watts is an estimate of the power going into the battery (null if the phone doesn't say). */
-class Charge(val source: Int, val watts: Float?, val full: Boolean)
+class BatInfo(val wireless: Boolean, val full: Boolean, val ma: Int?)
 
-fun chargeInfo(ctx: Context): Charge? {
-    val i = ctx.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return null
-    val plugged = i.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0)
-    if (plugged == 0) return null
-    val full = i.getIntExtra(BatteryManager.EXTRA_STATUS, -1) == BatteryManager.BATTERY_STATUS_FULL
-    val mv = i.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0)
+/** Instantaneous battery current in mA, signed: positive while charging, negative on battery (null if the phone doesn't say). */
+fun batteryInfo(ctx: Context): BatInfo {
+    val i = ctx.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+    val plugged = i?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
+    val full = i?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) == BatteryManager.BATTERY_STATUS_FULL
     val raw = try {
         ctx.getSystemService(BatteryManager::class.java).getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
     } catch (e: Exception) {
         Int.MIN_VALUE
     }
-    val watts = if (raw == Int.MIN_VALUE || raw == 0 || mv <= 0) null else {
-        val a = abs(raw.toLong()).toFloat()
-        val milliamps = if (a > 20_000f) a / 1000f else a // most phones report microamps, a few report milliamps
-        mv / 1000f * milliamps / 1000f
+    val ma = if (raw == Int.MIN_VALUE) null else {
+        // Most phones report microamps; a few report milliamps. Real currents never reach 20,000 mA.
+        if (abs(raw.toLong()) >= 20_000L) raw / 1000 else raw
     }
-    return Charge(plugged, watts, full)
+    return BatInfo(plugged == BatteryManager.BATTERY_PLUGGED_WIRELESS, full, ma)
 }
 
 /**
- * Icons: 🐢 slow (under 5 W), ⚡ normal, ⚡⚡ fast (15 W+), ⚡⚡⚡ super fast (30 W+); 🛜 wireless or 🔌 cable after the percentage.
- * The speed drops as the battery fills, so a fast charger shows fewer bolts near 100%.
+ * One symbol for the state: 🔋 on battery or full, 🐢 slow (under 1000 mA), 🔌 normal, ⚡ fast (3000 mA+), 🚀 super fast (6000 mA+).
+ * Then the percentage and the signed current, e.g. "⚡ 67%  +3450 mA" or "🔋 100%  -420 mA".
  */
-fun chargeText(level: Int, charging: Boolean, c: Charge?, detail: Int): String {
-    if (!charging) return "🔋 $level%"
-    if (c == null) return "⚡ $level%"
-    val source = if (c.source == BatteryManager.BATTERY_PLUGGED_WIRELESS) "🛜" else "🔌"
-    if (c.full) return "🔋 $level% $source"
-    val w = c.watts
-    val speed = when {
-        w == null -> "⚡"
-        w < 5f -> "🐢"
-        w < 15f -> "⚡"
-        w < 30f -> "⚡⚡"
-        else -> "⚡⚡⚡"
+fun batteryLine(level: Int, charging: Boolean, b: BatInfo, showMa: Boolean): String {
+    val ma = b.ma
+    val symbol = when {
+        !charging || b.full -> "🔋"
+        ma == null -> "⚡"
+        abs(ma) < 50 -> "🔋"
+        abs(ma) < 1000 -> "🐢"
+        abs(ma) < 3000 -> "🔌"
+        abs(ma) < 6000 -> "⚡"
+        else -> "🚀"
     }
-    return "$speed $level% $source" + if (detail >= 1 && w != null) "  ${Math.round(w)} W" else ""
+    val current = if (showMa && ma != null) "  " + (if (ma == 0) "0" else String.format(Locale.US, "%+d", ma)) + " mA" else ""
+    val wireless = if (charging && b.wireless) "  wireless" else ""
+    return "$symbol $level%$current$wireless"
 }
