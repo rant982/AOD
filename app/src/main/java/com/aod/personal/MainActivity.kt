@@ -226,6 +226,12 @@ private fun SettingsScreen() {
                     )
                     Text("Last screen-off: ${AodState.lastEvent}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
                     Text("Service started: ${Prefs.lastStart.ifEmpty { "not yet" }}", style = MaterialTheme.typography.bodySmall)
+                    val kills = remember(tick) { AodLog.recentKills(ctx, System.currentTimeMillis() - 3600_000L) }
+                    Text(
+                        if (kills.isEmpty()) "Restarted by the phone in the last hour: none"
+                        else "Restarted by the phone in the last hour: ${kills.size} (last at ${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(kills.max()))}). If this keeps growing, finish the Vivo battery and autostart steps below.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                     Text("Pixel shift: ${AodState.shiftNote}", style = MaterialTheme.typography.bodySmall)
                     Text("Night mode: ${if (isDndOn(ctx)) "ON (Do Not Disturb is on)" else "off (Do Not Disturb is off)"}", style = MaterialTheme.typography.bodySmall)
                     Text(

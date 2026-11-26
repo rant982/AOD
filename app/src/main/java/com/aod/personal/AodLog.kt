@@ -47,22 +47,35 @@ object AodLog {
         else -> "reason $r"
     }
 
-    /** Android keeps a record of why the app's previous process ended: log any we haven't logged yet. */
+    /** Android keeps a record of why the app's previous process ended: log any we haven't logged yet, and count the kills. */
     private fun logPreviousExits(c: Context) {
+        val lp = c.getSharedPreferences("aodlog", Context.MODE_PRIVATE)
+        val prevStart = lp.getLong("procStart", 0L)
+        lp.edit().putLong("procStart", System.currentTimeMillis()).apply()
         if (android.os.Build.VERSION.SDK_INT < 30) return
         try {
-            val lp = c.getSharedPreferences("aodlog", Context.MODE_PRIVATE)
             val last = lp.getLong("lastExit", 0L)
             val am = c.getSystemService(android.app.ActivityManager::class.java)
             val fresh = am.getHistoricalProcessExitReasons(c.packageName, 0, 6).filter { it.timestamp > last }.sortedBy { it.timestamp }
+            val kills = (lp.getString("kills", "") ?: "").split(",").mapNotNull { it.toLongOrNull() }.toMutableList()
             for (e in fresh) {
-                add("PREVIOUS PROCESS ENDED at ${SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(e.timestamp))}: ${reasonName(e.reason)} importance=${e.importance} ${e.description.orEmpty()}")
+                val lived = if (prevStart > 0 && e.timestamp > prevStart) " after running ${(e.timestamp - prevStart) / 1000} s" else ""
+                add("PREVIOUS PROCESS ENDED at ${SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(e.timestamp))}$lived: ${reasonName(e.reason)} importance=${e.importance} ${e.description.orEmpty()}")
+                // Killed by the phone (not an update, a crash, or the user): signalled, low memory, resources, other, frozen.
+                if (e.reason in listOf(2, 3, 9, 13, 14)) kills.add(e.timestamp)
             }
+            val cutoff = System.currentTimeMillis() - 24 * 3600_000L
+            lp.edit().putString("kills", kills.filter { it > cutoff }.joinToString(",")).apply()
             fresh.maxOfOrNull { it.timestamp }?.let { lp.edit().putLong("lastExit", it).apply() }
         } catch (e: Exception) {
             add("could not read exit reasons: ${e.message}")
         }
     }
+
+    /** Times (millis) the phone ended the app since [sinceMs]. */
+    fun recentKills(c: Context, sinceMs: Long): List<Long> =
+        (c.applicationContext.getSharedPreferences("aodlog", Context.MODE_PRIVATE).getString("kills", "") ?: "")
+            .split(",").mapNotNull { it.toLongOrNull() }.filter { it > sinceMs }
 
     @Synchronized
     fun add(msg: String) {
