@@ -60,6 +60,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
@@ -684,8 +685,8 @@ private fun SettingsPreview() {
             }
             Text(
                 androidx.compose.ui.text.buildAnnotatedString {
-                    androidx.compose.ui.text.withStyle(androidx.compose.ui.text.SpanStyle(color = hourC, fontWeight = weightHour)) { append("08") }
-                    androidx.compose.ui.text.withStyle(androidx.compose.ui.text.SpanStyle(color = minC, fontWeight = androidx.compose.ui.text.font.FontWeight.Light)) { append(":44") }
+                    withStyle(androidx.compose.ui.text.SpanStyle(color = hourC, fontWeight = weightHour)) { append("08") }
+                    withStyle(androidx.compose.ui.text.SpanStyle(color = minC, fontWeight = androidx.compose.ui.text.font.FontWeight.Light)) { append(":44") }
                 },
                 fontFamily = family, fontSize = (54 * Prefs.clockScale).sp
             )
