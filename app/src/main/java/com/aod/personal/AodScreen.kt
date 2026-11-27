@@ -454,6 +454,10 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                             },
                                         colorFilter = if (flashing && Prefs.iconStyle == 0) ColorFilter.tint(Color.White) else iconTint(n, selected, accent, dim)
                                     )
+                                    // A small red dot on apps whose notification can be replied to (WhatsApp, messages, ...).
+                                    if (Prefs.allowReply && notifs.any { x -> x.pkg == n.pkg && x.reply != null }) Box(
+                                        Modifier.align(Alignment.BottomEnd).padding(end = 7.dp, bottom = 7.dp).size(9.dp).background(Color(0xFFFF3B30), CircleShape)
+                                    )
                                     // Several alerts from one app: show how many.
                                     if (count > 1 && Prefs.showBadge) Text(
                                         "$count", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold,
