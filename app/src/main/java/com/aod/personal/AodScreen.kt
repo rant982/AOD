@@ -571,10 +571,13 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                                         verticalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
+                                        // "Reply" comes first, in the accent colour so it stands apart from the clearing buttons below.
+                                        HideChip("Reply", accent, "\u21A9", primary = true) { replying = n.key; replyText = "" }
                                         quick.forEach { q -> HideChip(q, dim, "\u21A9") { replying = n.key; replyText = q } }
                                     }
                                 }
                                 if (open && !replyingNow) FlowRow(
+                                    modifier = Modifier.padding(top = if (n.reply != null && Prefs.allowReply) 14.dp else 0.dp), // the clearing buttons sit apart from the reply ones
                                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                                     verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
@@ -585,7 +588,6 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                         NotifService.dismiss(n.key)
                                         expanded = next
                                     }
-                                    if (n.reply != null && Prefs.allowReply) HideChip("Reply", dim, "↩") { replying = n.key; replyText = "" }
                                     if (same.size > 1) {
                                         HideChip("Clear all ${same.size}", dim) {
                                             NotifService.dismissAll(same.map { x -> x.key })
