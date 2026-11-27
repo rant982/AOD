@@ -45,6 +45,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -313,8 +317,11 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
             val batteryText = if (Prefs.showBattery && battery.first >= 0) batteryLine(battery.first, battery.second, bat, Prefs.showMilliamps, batteryExpanded) else null
             val weatherText = weather?.takeIf { Prefs.showWeather }?.let { WeatherRepo.format(it, Prefs.fahrenheit, if (weatherExpanded) 2 else Prefs.weatherStyle) }
 
+            // Reading a long message: the weather, battery, calendar and music lines step aside so everything still fits on screen.
+            val reading = showFull != null && showFull == expanded
             // Blocks are drawn in the order chosen in Settings.
             order.forEachIndexed { idx, key ->
+                if (reading && key in setOf("BATTERY", "WEATHER", "CALENDAR", "MUSIC")) return@forEachIndexed
                 when (key) {
                     "LOGO" -> Logo(accent)
 
@@ -437,7 +444,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                 }
                             }
                         }
-                        val shown = if (Prefs.showPreview) notifs.take(3) else notifs.filter { it.key == expanded }
+                        val shown = if (Prefs.showPreview && !reading) notifs.take(3) else notifs.filter { it.key == expanded }
                         Column(Modifier.padding(top = 4.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                             shown.forEach { n ->
                                 val open = n.key == expanded
@@ -446,11 +453,14 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                 val fullTxt = listOf(n.title, n.full).filter { it.isNotBlank() }.joinToString(": ")
                                 val hasMore = n.full.isNotBlank() && n.full.trim() != n.text.trim() && fullTxt.length > txt.length
                                 val all = open && showFull == n.key && hasMore
+                                val scroll = rememberScrollState()
+                                // A long message gets a window about a third of the screen tall and scrolls inside it.
+                                val maxMsgH = (LocalConfiguration.current.screenHeightDp * 0.34f).dp
                                 Text(
                                     "${n.app} · ${if (all) fullTxt else txt}" + if (open && hasMore && !all) " ▾" else "",
                                     color = dim.copy(alpha = if (open) 0.9f else 0.55f), fontSize = if (open) 15.sp else 13.sp,
-                                    maxLines = if (all) 60 else if (open) 3 else 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-                                    modifier = Modifier
+                                    maxLines = if (all) Int.MAX_VALUE else if (open) 3 else 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                                    modifier = (if (all) Modifier.heightIn(max = maxMsgH).verticalScroll(scroll) else Modifier)
                                         .swipeAway {
                                             // Clears this one; the next alert from the same app (if any) comes up.
                                             val next = notifs.firstOrNull { x -> x.pkg == n.pkg && x.key != n.key }?.key
@@ -460,7 +470,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                         .tapOrTriple(
                                             onTap = {
                                                 if (open) {
-                                                    showFull = if (showFull == n.key) null else n.key
+                                                    if (hasMore) showFull = if (showFull == n.key) null else n.key
                                                     AodLog.add("message tapped pkg=${n.pkg} hasMore=$hasMore textLen=${n.text.length} fullLen=${n.full.length}")
                                                 } else expanded = n.key
                                             },
