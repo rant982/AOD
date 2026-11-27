@@ -146,6 +146,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
     // Weather: tap once = full detail and a fresh forecast; tap again (within 10 seconds) = open the forecast.
     var weatherExpanded by remember { mutableStateOf(false) }
     var batteryExpanded by remember { mutableStateOf(false) }
+    var showFull by remember { mutableStateOf<String?>(null) } // key of the notification whose whole text is showing
     LaunchedEffect(weatherExpanded) {
         if (weatherExpanded) {
             delay(10_000)
@@ -432,9 +433,14 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                             shown.forEach { n ->
                                 val open = n.key == expanded
                                 val txt = listOf(n.title, n.text).filter { it.isNotBlank() }.joinToString(": ")
+                                // Tap an open message once to read all of it (and again to fold it back up).
+                                val fullTxt = listOf(n.title, n.full).filter { it.isNotBlank() }.joinToString(": ")
+                                val hasMore = n.full.isNotBlank() && n.full.trim() != n.text.trim() && fullTxt.length > txt.length
+                                val all = open && showFull == n.key && hasMore
                                 Text(
-                                    "${n.app} · $txt", color = dim.copy(alpha = if (open) 0.9f else 0.55f), fontSize = if (open) 15.sp else 13.sp,
-                                    maxLines = if (open) 12 else 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                                    "${n.app} · ${if (all) fullTxt else txt}" + if (open && hasMore && !all) " ▾" else "",
+                                    color = dim.copy(alpha = if (open) 0.9f else 0.55f), fontSize = if (open) 15.sp else 13.sp,
+                                    maxLines = if (all) 60 else if (open) 3 else 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
                                     modifier = Modifier
                                         .swipeAway {
                                             // Clears this one; the next alert from the same app (if any) comes up.
@@ -443,7 +449,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                             if (expanded == n.key) expanded = next
                                         }
                                         .tapOrTriple(
-                                            onTap = { expanded = n.key },
+                                            onTap = { if (open) showFull = if (showFull == n.key) null else n.key else expanded = n.key },
                                             onTriple = { activity?.let { a -> openNotification(a, n) } }
                                         )
                                         .padding(vertical = 6.dp, horizontal = 8.dp)

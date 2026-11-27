@@ -93,6 +93,23 @@ class NotifService : NotificationListenerService() {
         watched = emptyList()
     }
 
+    /** The whole message: the expanded text, an inbox list, or all the lines of a chat, whichever the app provides. */
+    @Suppress("DEPRECATION")
+    private fun fullText(ex: android.os.Bundle): String {
+        val big = ex.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString().orEmpty()
+        if (big.isNotBlank()) return big
+        val lines = ex.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.joinToString("\n") { it.toString() }.orEmpty()
+        if (lines.isNotBlank()) return lines
+        val msgs = ex.getParcelableArray(Notification.EXTRA_MESSAGES)?.mapNotNull { m ->
+            (m as? android.os.Bundle)?.let { b ->
+                val t = b.getCharSequence("text")?.toString().orEmpty()
+                val who = b.getCharSequence("sender")?.toString()
+                if (t.isBlank()) null else if (who.isNullOrBlank()) t else "$who: $t"
+            }
+        }?.joinToString("\n").orEmpty()
+        return msgs
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         // Our own foreground/alert notification must never trigger anything (that caused a restart loop).
         if (sbn.packageName == packageName) return
@@ -142,6 +159,7 @@ class NotifService : NotificationListenerService() {
                 },
                 title = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty(),
                 text = (ex.getCharSequence(Notification.EXTRA_TEXT) ?: ex.getCharSequence(Notification.EXTRA_BIG_TEXT))?.toString().orEmpty(),
+                full = fullText(ex),
                 intent = sbn.notification.contentIntent,
                 color = sbn.notification.color,
                 appIcon = appIconCache.getOrPut(sbn.packageName) { try {
