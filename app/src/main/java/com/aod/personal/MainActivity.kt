@@ -3,6 +3,7 @@ package com.aod.personal
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import kotlinx.coroutines.launch
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -248,6 +249,7 @@ private fun SettingsScreen() {
                 }
             }
         }
+        item { UpdateCard(ctx) }
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Enable always-on display", Modifier.weight(1f))
@@ -760,6 +762,61 @@ private fun SettingsPreview() {
                 else "Hue and Strength currently change: ${follows.joinToString(", ")}.",
                 color = Color.Gray, fontSize = 10.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
+        }
+    }
+}
+
+
+/** One-tap updating: checks the latest GitHub release and installs it from inside the app. */
+@Composable
+private fun UpdateCard(ctx: Context) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var latest by remember { mutableStateOf<Updater.Latest?>(null) }
+    var msg by remember { mutableStateOf("Checking for updates\u2026") }
+    var busy by remember { mutableStateOf(false) }
+    var progress by remember { mutableIntStateOf(0) }
+    val mine = remember { Updater.installedBuild(ctx) }
+    fun check() {
+        busy = true
+        msg = "Checking for updates\u2026"
+        scope.launch {
+            val (l, err) = withContext(Dispatchers.IO) { Updater.check() }
+            latest = l
+            msg = when {
+                err != null -> "Couldn't check: $err"
+                l != null && l.build > mine -> "Update available: ${l.name}"
+                l != null -> "You have the latest version."
+                else -> ""
+            }
+            busy = false
+        }
+    }
+    LaunchedEffect(Unit) { check() }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Updates", style = MaterialTheme.typography.titleMedium)
+            Text("Installed: ${appVersion(ctx)}    " + msg, style = MaterialTheme.typography.bodyMedium)
+            if (busy && progress in 1..99) Text("Downloading\u2026 $progress%", style = MaterialTheme.typography.bodySmall)
+            val l = latest
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (l != null && l.build > mine) Button({
+                    if (!ctx.packageManager.canRequestPackageInstalls()) {
+                        msg = "Allow \"Install unknown apps\" for My AOD, come back, then press Update now again."
+                        ctx.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}")))
+                    } else {
+                        busy = true
+                        progress = 0
+                        msg = "Downloading ${l.name}\u2026"
+                        scope.launch {
+                            val err = withContext(Dispatchers.IO) { Updater.install(ctx, l) { progress = it } }
+                            msg = if (err != null) "Update failed: $err" else "Downloaded. Confirm the install when Android asks."
+                            busy = false
+                        }
+                    }
+                }, enabled = !busy) { Text("Update now") }
+                OutlinedButton({ check() }, enabled = !busy) { Text("Check again") }
+                OutlinedButton({ ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Updater.PAGE))) }) { Text("Releases page") }
+            }
         }
     }
 }
