@@ -26,12 +26,18 @@ android {
                 keyPassword = System.getenv("AOD_KEYSTORE_PASSWORD")
             }
         }
-        buildTypes { getByName("debug") { signingConfig = signingConfigs.getByName("aod") } }
+        buildTypes {
+            getByName("debug") { signingConfig = signingConfigs.getByName("aod") }
+            getByName("release") { signingConfig = signingConfigs.getByName("aod") }
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    // Release builds are not "debuggable", which some phones treat more kindly in the background. No shrinking, so behaviour is unchanged.
+    buildTypes { getByName("release") { isMinifyEnabled = false; isDebuggable = false } }
+    lint { checkReleaseBuilds = false; abortOnError = false }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.14" }

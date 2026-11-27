@@ -49,12 +49,12 @@ jobs:
           echo "AOD_KEYSTORE_PASSWORD=$PASS" >> "$GITHUB_ENV"
           echo "SIGNING=stable" >> "$GITHUB_ENV"
           echo "Signing key OK."
-      - run: gradle assembleDebug --no-daemon -PbuildNumber=${{ github.run_number }}
+      - run: gradle assembleRelease --no-daemon -PbuildNumber=${{ github.run_number }}
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VER="1.1.${{ github.run_number }}"
-          cp app/build/outputs/apk/debug/app-debug.apk "my-aod-$VER.apk"
+          cp app/build/outputs/apk/release/app-release.apk "my-aod-$VER.apk"
           gh release create "build-${{ github.run_number }}" "my-aod-$VER.apk" \
             --title "My AOD $VER" --notes "$(git log -1 --pretty=%s) [signing: $SIGNING]" --latest
