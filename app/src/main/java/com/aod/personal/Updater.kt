@@ -24,8 +24,11 @@ object Updater {
     }
 
     /** The bullet list of changes from a release's notes (without the technical footer). */
-    private fun notesOf(body: String): String =
-        body.lines().map { it.trim() }.filter { it.startsWith("- ") }.joinToString("\n") { "\u2022 " + it.removePrefix("- ") }
+    private fun notesOf(body: String): String {
+        val bullets = body.lines().map { it.trim() }.filter { it.startsWith("- ") }.joinToString("\n") { "\u2022 " + it.removePrefix("- ") }
+        // Older releases have a single line of text instead of a list.
+        return bullets.ifBlank { body.replace(Regex("\\[signing:[^\\]]*\\]"), "").replace(Regex("<!--.*?-->", RegexOption.DOT_MATCHES_ALL), "").trim() }
+    }
 
     class Release(val name: String, val date: String, val notes: String)
 
