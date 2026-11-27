@@ -819,6 +819,7 @@ private fun UpdateCard(ctx: Context) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Updates", style = MaterialTheme.typography.titleMedium)
             Text("Installed: ${appVersion(ctx)}    " + msg, style = MaterialTheme.typography.bodyMedium)
+            latest?.let { n -> if (n.build > mine && n.notes.isNotBlank()) Text("What's new:\n" + n.notes, style = MaterialTheme.typography.bodySmall) }
             if (busy && progress in 1..99) Text("Downloading\u2026 $progress%", style = MaterialTheme.typography.bodySmall)
             val l = latest
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

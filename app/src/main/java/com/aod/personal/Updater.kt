@@ -15,13 +15,17 @@ object Updater {
     const val API = "https://api.github.com/repos/rant982/AOD/releases/latest"
     const val PAGE = "https://github.com/rant982/AOD/releases/latest"
 
-    class Latest(val build: Int, val name: String, val url: String)
+    class Latest(val build: Int, val name: String, val url: String, val notes: String = "")
 
     @Suppress("DEPRECATION")
     fun installedBuild(ctx: Context): Int {
         val pi = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
         return if (Build.VERSION.SDK_INT >= 28) pi.longVersionCode.toInt() else pi.versionCode
     }
+
+    /** The bullet list of changes from a release's notes (without the technical footer). */
+    private fun notesOf(body: String): String =
+        body.lines().map { it.trim() }.filter { it.startsWith("- ") }.joinToString("\n") { "\u2022 " + it.removePrefix("- ") }
 
     /** (latest release, error). Blocking: call off the main thread. */
     fun check(): Pair<Latest?, String?> = try {
@@ -46,7 +50,7 @@ object Updater {
                 }
             }
             if (build == null || url == null) null to "The latest release has no installable file"
-            else Latest(build, j.optString("name", tag), url) to null
+            else Latest(build, j.optString("name", tag), url, notesOf(j.optString("body"))) to null
         }
     } catch (e: Exception) {
         null to (e.message ?: "Couldn't reach GitHub")

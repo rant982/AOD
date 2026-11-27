@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # full history, so the release notes can list what changed since the last build
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -56,5 +58,24 @@ jobs:
         run: |
           VER="1.1.${{ github.run_number }}"
           cp app/build/outputs/apk/release/app-release.apk "my-aod-$VER.apk"
+          # What changed: every commit since the previous release (found from the commit recorded in its notes,
+          # or, for older releases, from the time it was published).
+          PREV=$(gh release view --json body -q .body 2>/dev/null | grep -oE 'built-from: [0-9a-f]{40}' | head -1 | cut -d' ' -f2 || true)
+          if [ -n "$PREV" ] && git cat-file -e "$PREV^{commit}" 2>/dev/null; then
+            LOG=$(git log --no-merges --format='- %s' "$PREV..HEAD")
+          else
+            PUB=$(gh release view --json publishedAt -q .publishedAt 2>/dev/null || true)
+            if [ -n "$PUB" ]; then LOG=$(git log --no-merges --format='- %s' --since="$PUB"); else LOG=""; fi
+          fi
+          [ -z "$LOG" ] && LOG="- $(git log -1 --format=%s)"
+          {
+            echo "## What's new in $VER"
+            echo
+            echo "$LOG"
+            echo
+            echo "Signing: $SIGNING"
+            echo
+            echo "<!-- built-from: $GITHUB_SHA -->"
+          } > notes.md
           gh release create "build-${{ github.run_number }}" "my-aod-$VER.apk" \
-            --title "My AOD $VER" --notes "$(git log -1 --pretty=%s) [signing: $SIGNING]" --latest
+            --title "My AOD $VER" --notes-file notes.md --target "$GITHUB_SHA" --latest
