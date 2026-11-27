@@ -27,6 +27,28 @@ object Updater {
     private fun notesOf(body: String): String =
         body.lines().map { it.trim() }.filter { it.startsWith("- ") }.joinToString("\n") { "\u2022 " + it.removePrefix("- ") }
 
+    class Release(val name: String, val date: String, val notes: String)
+
+    /** The most recent releases with their notes, newest first. Blocking: call off the main thread. */
+    fun history(): Pair<List<Release>, String?> = try {
+        val c = URL("https://api.github.com/repos/rant982/AOD/releases?per_page=20").openConnection() as HttpURLConnection
+        c.setRequestProperty("Accept", "application/vnd.github+json")
+        c.setRequestProperty("User-Agent", "MyAOD-updater")
+        c.connectTimeout = 10_000
+        c.readTimeout = 15_000
+        if (c.responseCode != 200) emptyList<Release>() to "GitHub answered ${c.responseCode}"
+        else {
+            val arr = org.json.JSONArray(c.inputStream.bufferedReader().readText())
+            val out = (0 until arr.length()).map { i ->
+                val r = arr.getJSONObject(i)
+                Release(r.optString("name", r.optString("tag_name")), r.optString("published_at").take(10), notesOf(r.optString("body")))
+            }
+            out to null
+        }
+    } catch (e: Exception) {
+        emptyList<Release>() to (e.message ?: "Couldn't reach GitHub")
+    }
+
     /** (latest release, error). Blocking: call off the main thread. */
     fun check(): Pair<Latest?, String?> = try {
         val c = URL(API).openConnection() as HttpURLConnection

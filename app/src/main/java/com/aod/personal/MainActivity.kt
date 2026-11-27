@@ -19,6 +19,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.size
@@ -815,6 +818,21 @@ private fun UpdateCard(ctx: Context) {
         }
     }
     LaunchedEffect(Unit) { check() }
+    // Release notes: shown by the "What's new" button, and once automatically the first time a new version opens.
+    var showNotes by remember { mutableStateOf(false) }
+    var justUpdated by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val seen = Prefs.lastSeenBuild
+        if (seen in 1 until mine) {
+            justUpdated = true
+            showNotes = true
+        } else if (seen == 0) Prefs.lastSeenBuild = mine
+    }
+    if (showNotes) NotesDialog(ctx, if (justUpdated) "Updated to v${appVersion(ctx)}" else "What's new") {
+        showNotes = false
+        justUpdated = false
+        Prefs.lastSeenBuild = mine
+    }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Updates", style = MaterialTheme.typography.titleMedium)
@@ -824,9 +842,45 @@ private fun UpdateCard(ctx: Context) {
             val l = latest
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (l != null && l.build > mine) Button({ startInstall(l) }, enabled = !busy) { Text("Update now") }
+                OutlinedButton({ showNotes = true }) { Text("What's new") }
                 OutlinedButton({ check() }, enabled = !busy) { Text("Check again") }
                 OutlinedButton({ ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Updater.PAGE))) }) { Text("Releases page") }
             }
         }
     }
+}
+
+
+/** The release notes of recent versions, newest first, in a window that stays until you close it. */
+@Composable
+private fun NotesDialog(ctx: Context, title: String, onClose: () -> Unit) {
+    var releases by remember { mutableStateOf<List<Updater.Release>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        val (r, e) = withContext(Dispatchers.IO) { Updater.history() }
+        releases = r
+        error = e
+    }
+    val mineName = appVersion(ctx)
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text(title) },
+        confirmButton = { TextButton(onClose) { Text("Close") } },
+        text = {
+            Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                val list = releases
+                when {
+                    list == null -> Text("Loading\u2026")
+                    error != null -> Text("Couldn't load the notes: $error")
+                    list.isEmpty() -> Text("No releases found.")
+                    else -> list.forEach { r ->
+                        Column {
+                            Text(r.name + (if (r.name.endsWith(mineName)) "  (installed)" else "") + "  \u00B7  " + r.date, style = MaterialTheme.typography.titleSmall)
+                            Text(r.notes.ifBlank { "No details recorded." }, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+        }
+    )
 }
