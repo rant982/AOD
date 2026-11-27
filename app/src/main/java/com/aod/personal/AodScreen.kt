@@ -231,16 +231,18 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
 
     // Night = Do Not Disturb is on. The backlight is lowered by the activity; here the clock, icons and text themselves are
     // dimmed too, because lowering only the backlight can still look very bright on some phones.
-    var night by remember { mutableStateOf(isDndOn(ctx)) }
+    var dnd by remember { mutableStateOf(isDndOn(ctx)) }
     DisposableEffect(Unit) {
         val r = object : BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) {
-                night = isDndOn(c)
+                dnd = isDndOn(c)
             }
         }
         ContextCompat.registerReceiver(ctx, r, IntentFilter(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
         onDispose { ctx.unregisterReceiver(r) }
     }
+    val inNightHours = remember(now) { inNightHours() } // re-checked every minute
+    val night = dnd && inNightHours
     val dimK = if (night && Prefs.nightDim) Prefs.nightContent.coerceIn(0.05f, 1f) else 1f
 
     // Pixel shift (burn-in protection): jump to a new random spot as soon as the AOD appears, then every 45 seconds.
@@ -255,7 +257,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
         }
         while (true) {
             val nm = ctx.getSystemService(NotificationManager::class.java)
-            val night = nm.currentInterruptionFilter.let { it != NotificationManager.INTERRUPTION_FILTER_ALL && it != NotificationManager.INTERRUPTION_FILTER_UNKNOWN }
+            val night = isNightNow(ctx)
             // By day it only moves up and down (sideways looks untidy); at night it moves sideways too.
             val dx = if (night) with(density) { Random.nextInt(-hx, hx + 1).dp.roundToPx() } else 0
             val dy = with(density) { Random.nextInt(-vy, vy + 1).dp.roundToPx() }
@@ -929,6 +931,18 @@ private fun Modifier.onTapOnly(action: () -> Unit): Modifier = composed {
     val act by rememberUpdatedState(action)
     pointerInput(Unit) { detectTapGestures(onTap = { act() }) }
 }
+
+/** True when the clock is inside the chosen night hours (always true if the hours limit is switched off). */
+fun inNightHours(): Boolean {
+    if (!Prefs.nightHoursOnly) return true
+    val h = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+    val from = Prefs.nightFrom
+    val to = Prefs.nightTo
+    return if (from > to) h >= from || h < to else h in from until to
+}
+
+/** Night mode: Do Not Disturb is on, and it is night-time by the chosen hours. */
+fun isNightNow(c: Context): Boolean = isDndOn(c) && inNightHours()
 
 /** True while Do Not Disturb (any mode other than "allow all") is on. */
 fun isDndOn(c: Context): Boolean {

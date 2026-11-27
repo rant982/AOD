@@ -132,11 +132,14 @@ class AodActivity : ComponentActivity(), SensorEventListener {
     }
 
     /** Watchdog: if the phone is ever found unlocked while the AOD is up, lock it again. */
+    private var lastNight = false
     private val guard = object : Runnable {
         private var beats = 0
 
         override fun run() {
             ensureLocked()
+            // Night starts or ends by the clock (the hours setting) without any Do Not Disturb change: follow it.
+            if ((Prefs.nightDim && isNightNow(this@AodActivity)) != lastNight) applyBrightness()
             if (++beats % 5 == 1) Prefs.aodHeartbeat = System.currentTimeMillis()
             handler.postDelayed(this, 2000)
         }
@@ -205,7 +208,8 @@ class AodActivity : ComponentActivity(), SensorEventListener {
     private fun applyBrightness() {
         val lp = window.attributes
         // Never 0: on some phones "lowest" is dark enough to look switched off. 0.02 is dim but still a readable clock.
-        val night = Prefs.nightDim && isDnd()
+        val night = Prefs.nightDim && isNightNow(this)
+        lastNight = night
         lp.screenBrightness = if (night) Prefs.nightBrightness.coerceAtLeast(0.02f) else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         AodLog.add("brightness night=$night value=${lp.screenBrightness}")
         window.attributes = lp

@@ -86,6 +86,10 @@ object Prefs {
     var sat by F("sat", 0f)
     var clockScale by F("clockScale", 1f)
     var nightDim by B("nightDim", true)
+    /** Night mode (dark) only applies between these hours, so Do Not Disturb in the daytime (an interview, say) stays bright. */
+    var nightHoursOnly by B("nightHoursOnly", true)
+    var nightFrom by I("nightFrom", 21)
+    var nightTo by I("nightTo", 7)
     var nightBrightness by F("nightBrightness", 0.03f)
 
     /** At night (Do Not Disturb on) the clock, icons and text themselves are drawn at this fraction of full brightness. */

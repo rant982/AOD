@@ -237,7 +237,7 @@ private fun SettingsScreen() {
                         style = MaterialTheme.typography.bodySmall
                     )
                     Text("Pixel shift: ${AodState.shiftNote}", style = MaterialTheme.typography.bodySmall)
-                    Text("Night mode: ${if (isDndOn(ctx)) "ON (Do Not Disturb is on)" else "off (Do Not Disturb is off)"}", style = MaterialTheme.typography.bodySmall)
+                    Text("Night mode: ${if (isNightNow(ctx)) "ON (Do Not Disturb is on, within night hours)" else if (isDndOn(ctx)) "off (Do Not Disturb is on, but it's outside the night hours)" else "off (Do Not Disturb is off)"}", style = MaterialTheme.typography.bodySmall)
                     Text(
                         "After a phone restart, unlock once (Android requires it) and the AOD starts by itself. If it doesn't, allow Auto-launch / background activity for My AOD under App settings > Battery.",
                         style = MaterialTheme.typography.bodySmall,
@@ -303,6 +303,19 @@ private fun SettingsScreen() {
         item { SliderRow("Spacing between items", Prefs.blockGap, 0f..60f) { Prefs.blockGap = it } }
         item { Text("Daytime brightness follows your phone's brightness setting (including automatic).", style = MaterialTheme.typography.bodySmall) }
         item { SwitchRow("Dim at night when Do Not Disturb is on", Prefs.nightDim) { Prefs.nightDim = it } }
+        item { SwitchRow("Only during night hours (Do Not Disturb in the daytime, e.g. an interview, stays bright)", Prefs.nightHoursOnly) { Prefs.nightHoursOnly = it; tick++ } }
+        if (Prefs.nightHoursOnly) {
+            item {
+                var from by remember { mutableIntStateOf(Prefs.nightFrom) }
+                val opts = listOf(18, 19, 20, 21, 22, 23)
+                Chips("Night starts at", opts.map { "%02d:00".format(it) }, opts.indexOf(from).coerceAtLeast(0)) { from = opts[it]; Prefs.nightFrom = from }
+            }
+            item {
+                var to by remember { mutableIntStateOf(Prefs.nightTo) }
+                val opts = listOf(5, 6, 7, 8, 9, 10)
+                Chips("Night ends at", opts.map { "%02d:00".format(it) }, opts.indexOf(to).coerceAtLeast(0)) { to = opts[it]; Prefs.nightTo = to }
+            }
+        }
         item {
             // One control for both: it sets how bright the screen's backlight is and how bright the clock and icons are drawn.
             SliderRow("Night brightness (left = dimmest that is still visible)", ((Prefs.nightContent - 0.2f) / 0.75f).coerceIn(0f, 1f), 0f..1f) { v ->
