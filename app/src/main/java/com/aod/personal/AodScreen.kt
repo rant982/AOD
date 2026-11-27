@@ -241,7 +241,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
         ContextCompat.registerReceiver(ctx, r, IntentFilter(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
         onDispose { ctx.unregisterReceiver(r) }
     }
-    val inNightHours = remember(now) { inNightHours() } // re-checked every minute
+    val inNightHours = remember(now) { inNightHours(ctx) } // re-checked every minute
     val night = dnd && inNightHours
     val dimK = if (night && Prefs.nightDim) Prefs.nightContent.coerceIn(0.05f, 1f) else 1f
 
@@ -933,8 +933,9 @@ private fun Modifier.onTapOnly(action: () -> Unit): Modifier = composed {
 }
 
 /** True when the clock is inside the chosen night hours (always true if the hours limit is switched off). */
-fun inNightHours(): Boolean {
+fun inNightHours(ctx: Context): Boolean {
     if (!Prefs.nightHoursOnly) return true
+    if (Prefs.nightBySun) Sun.isDark(ctx)?.let { return it } // sunset to sunrise where you are
     val h = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
     val from = Prefs.nightFrom
     val to = Prefs.nightTo
@@ -942,7 +943,7 @@ fun inNightHours(): Boolean {
 }
 
 /** Night mode: Do Not Disturb is on, and it is night-time by the chosen hours. */
-fun isNightNow(c: Context): Boolean = isDndOn(c) && inNightHours()
+fun isNightNow(c: Context): Boolean = isDndOn(c) && inNightHours(c)
 
 /** True while Do Not Disturb (any mode other than "allow all") is on. */
 fun isDndOn(c: Context): Boolean {

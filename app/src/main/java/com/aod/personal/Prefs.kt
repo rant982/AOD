@@ -88,6 +88,10 @@ object Prefs {
     var nightDim by B("nightDim", true)
     /** Night mode (dark) only applies between these hours, so Do Not Disturb in the daytime (an interview, say) stays bright. */
     var nightHoursOnly by B("nightHoursOnly", true)
+    /** Night = after sunset and before sunrise where the phone is (falls back to the fixed hours if its location is unknown). */
+    var nightBySun by B("nightBySun", true)
+    var sunLat by S("sunLat", "")
+    var sunLon by S("sunLon", "")
     var nightFrom by I("nightFrom", 21)
     var nightTo by I("nightTo", 7)
     var nightBrightness by F("nightBrightness", 0.03f)

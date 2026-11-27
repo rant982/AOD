@@ -306,11 +306,30 @@ private fun SettingsScreen() {
         item { SwitchRow("Only during night hours (Do Not Disturb in the daytime, e.g. an interview, stays bright)", Prefs.nightHoursOnly) { Prefs.nightHoursOnly = it; tick++ } }
         if (Prefs.nightHoursOnly) {
             item {
+                var bySun by remember { mutableStateOf(Prefs.nightBySun) }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    SwitchRow("Night follows sunset and sunrise where you are", bySun) { bySun = it; Prefs.nightBySun = it; tick++ }
+                    val loc = remember(tick) { Sun.location(ctx) }
+                    val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                    val d = loc?.let { Sun.day(it.first, it.second, System.currentTimeMillis()) }
+                    Text(
+                        when {
+                            !bySun -> "Using the fixed hours below."
+                            loc == null -> "Your location isn't known yet, so the fixed hours below are used. Allow Location for My AOD, or enter latitude and longitude under Weather."
+                            d?.rise != null && d.set != null -> "Today: sunrise ${fmt.format(java.util.Date(d.rise))}, sunset ${fmt.format(java.util.Date(d.set))}. Night is after sunset until sunrise."
+                            d?.polarNight == true -> "The sun doesn't rise today where you are, so it counts as night all day."
+                            else -> "The sun doesn't set today where you are, so it counts as day all day."
+                        },
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+            if (!Prefs.nightBySun) item {
                 var from by remember { mutableIntStateOf(Prefs.nightFrom) }
                 val opts = listOf(18, 19, 20, 21, 22, 23)
                 Chips("Night starts at", opts.map { "%02d:00".format(it) }, opts.indexOf(from).coerceAtLeast(0)) { from = opts[it]; Prefs.nightFrom = from }
             }
-            item {
+            if (!Prefs.nightBySun) item {
                 var to by remember { mutableIntStateOf(Prefs.nightTo) }
                 val opts = listOf(5, 6, 7, 8, 9, 10)
                 Chips("Night ends at", opts.map { "%02d:00".format(it) }, opts.indexOf(to).coerceAtLeast(0)) { to = opts[it]; Prefs.nightTo = to }
@@ -791,6 +810,7 @@ private fun SettingsPreview() {
 
 
 /** One-tap updating: checks the latest GitHub release and installs it from inside the app. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun UpdateCard(ctx: Context) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -858,7 +878,8 @@ private fun UpdateCard(ctx: Context) {
             latest?.let { n -> if (n.build > mine && n.notes.isNotBlank()) Text("What's new:\n" + n.notes, style = MaterialTheme.typography.bodySmall) }
             if (busy && progress in 1..99) Text("Downloading\u2026 $progress%", style = MaterialTheme.typography.bodySmall)
             val l = latest
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Wraps instead of squeezing the last button into a thin column.
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (l != null && l.build > mine) Button({ startInstall(l) }, enabled = !busy) { Text("Update now") }
                 OutlinedButton({ showNotes = true }) { Text("What's new") }
                 OutlinedButton({ check() }, enabled = !busy) { Text("Check again") }

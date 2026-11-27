@@ -147,7 +147,7 @@ object WeatherRepo {
         }
     }
 
-    private fun location(ctx: Context): Pair<Double, Double>? {
+    fun location(ctx: Context): Pair<Double, Double>? {
         val la = Prefs.lat.trim().toDoubleOrNull()
         val lo = Prefs.lon.trim().toDoubleOrNull()
         if (la != null && lo != null) return la to lo
