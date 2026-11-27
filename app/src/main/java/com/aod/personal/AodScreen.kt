@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.platform.LocalDensity
 import kotlin.math.abs
@@ -256,7 +257,10 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
             undo = null
         }
     }
-    LaunchedEffect(Unit) {
+    // The version shows for 10 s when the AOD opens, and again for 10 s whenever the top-right corner is tapped.
+    var versionTap by remember { mutableIntStateOf(0) }
+    LaunchedEffect(versionTap) {
+        showVersion = true
         delay(10_000)
         showVersion = false
     }
@@ -275,10 +279,15 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                 )
             }
     ) {
-        if (!covered && showVersion) Text(
-            "v${appVersion(ctx)}", color = dim.copy(alpha = 0.5f), fontSize = 11.sp,
-            modifier = Modifier.align(Alignment.TopEnd).systemBarsPadding().padding(12.dp)
-        )
+        if (!covered) Box(
+            Modifier.align(Alignment.TopEnd).systemBarsPadding().size(72.dp, 56.dp).onTapOnly { versionTap++ },
+            contentAlignment = Alignment.TopEnd
+        ) {
+            if (showVersion) Text(
+                "v${appVersion(ctx)}", color = dim.copy(alpha = 0.5f), fontSize = 11.sp,
+                modifier = Modifier.padding(12.dp)
+            )
+        }
         if (!covered) Column(
             Modifier
                 .fillMaxSize()
