@@ -405,8 +405,8 @@ private fun SettingsScreen() {
             val opts = listOf(0, 1, 2, 3, 5)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Chips(
-                    "Switch to the AOD after no use for (the phone's own screen timeout while the AOD is on)",
-                    opts.map { if (it == 0) "Phone's setting" else "$it min" }, opts.indexOf(mins).coerceAtLeast(0)
+                    "Switch to the AOD after no use for (sets the phone's screen timeout while the AOD is on; Default leaves it alone)",
+                    opts.map { if (it == 0) "Default" else "$it min" }, opts.indexOf(mins).coerceAtLeast(0)
                 ) {
                     mins = opts[it]; Prefs.idleMinutes = mins
                     IdleTimeout.apply(ctx, Prefs.enabled && AodService.running)
@@ -549,11 +549,13 @@ private fun SliderRow(label: String, initial: Float, range: ClosedFloatingPointR
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Chips(label: String, options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
     Column {
         Text(label, style = MaterialTheme.typography.bodySmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Wraps onto a second line instead of squeezing the last chip.
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             options.forEachIndexed { i, o -> FilterChip(selected == i, { onSelect(i) }, { Text(o) }) }
         }
     }
