@@ -449,7 +449,12 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                             if (expanded == n.key) expanded = next
                                         }
                                         .tapOrTriple(
-                                            onTap = { if (open) showFull = if (showFull == n.key) null else n.key else expanded = n.key },
+                                            onTap = {
+                                                if (open) {
+                                                    showFull = if (showFull == n.key) null else n.key
+                                                    AodLog.add("message tapped pkg=${n.pkg} hasMore=$hasMore textLen=${n.text.length} fullLen=${n.full.length}")
+                                                } else expanded = n.key
+                                            },
                                             onTriple = { activity?.let { a -> openNotification(a, n) } }
                                         )
                                         .padding(vertical = 6.dp, horizontal = 8.dp)

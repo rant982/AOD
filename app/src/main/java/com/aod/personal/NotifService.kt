@@ -119,7 +119,13 @@ class NotifService : NotificationListenerService() {
         val nowMs = System.currentTimeMillis()
         if (nowMs - (lastLogged[sbn.packageName] ?: 0L) > 60_000L) {
             lastLogged[sbn.packageName] = nowMs
-            AodLog.add("notification posted pkg=${sbn.packageName} category=${n.category}")
+            val x = n.extras
+            AodLog.add(
+                "notification posted pkg=${sbn.packageName} category=${n.category} " +
+                    "text=${x.getCharSequence(Notification.EXTRA_TEXT)?.length ?: 0} big=${x.getCharSequence(Notification.EXTRA_BIG_TEXT)?.length ?: 0} " +
+                    "lines=${x.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.size ?: 0} msgs=${x.getParcelableArray(Notification.EXTRA_MESSAGES)?.size ?: 0} " +
+                    "full=${fullText(x).length}"
+            )
         }
         if (n.fullScreenIntent != null || n.category == Notification.CATEGORY_CALL || n.category == Notification.CATEGORY_ALARM) {
             AodState.lastFullScreenAt = System.currentTimeMillis()
