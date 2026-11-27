@@ -110,6 +110,8 @@ object Prefs {
     var showPreview by B("alwaysPreview", false)
     var edgeLight by B("edgeLight", true)
     var flashIcon by B("flashIcon", true)
+    /** How long a new notification's icon keeps flashing, in seconds. */
+    var flashSeconds by I("flashSeconds", 3)
     var showBadge by B("showBadge", true)
     var blocked: Set<String>
         get() = sp.getStringSet("blocked", emptySet())!!.toSet()

@@ -199,7 +199,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
     LaunchedEffect(Unit) {
         if (Prefs.flashIcon) NotifRepo.events.collectLatest { pkg ->
             flashPkg = pkg
-            repeat(4) {
+            repeat((Prefs.flashSeconds / 0.7f).toInt().coerceAtLeast(1)) { // one pulse takes 0.7 s
                 flash.animateTo(1f, tween(350))
                 flash.animateTo(0f, tween(350))
             }
