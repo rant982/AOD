@@ -561,7 +561,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                         AodLog.add("reply to ${n.pkg} sent=$ok chars=${replyText.length}")
                                         if (ok) {
                                             // You've answered, so it counts as read: tell the app (if it has "Mark as read") and take it off the AOD.
-                                            // The app often re-posts the chat with your reply added, so clear it again a moment later.
+                                            // The app often re-posts the chat with your reply added within a second, so clear it once more shortly after.
                                             try {
                                                 n.markRead?.actionIntent?.send()
                                             } catch (e: Exception) {
@@ -570,8 +570,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                             NotifService.dismiss(n.key)
                                             expanded = notifs.firstOrNull { x -> x.pkg == n.pkg && x.key != n.key }?.key
                                             uiScope.launch {
-                                                delay(3_000); NotifService.dismiss(n.key)
-                                                delay(5_000); NotifService.dismiss(n.key)
+                                                delay(1_500); NotifService.dismiss(n.key) // one quick re-clear only, so a new message isn't caught by it
                                             }
                                         }
                                         replying = null; replyText = ""
