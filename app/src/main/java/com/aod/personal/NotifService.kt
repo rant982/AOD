@@ -14,6 +14,7 @@ import androidx.core.graphics.drawable.toBitmap
 class NotifService : NotificationListenerService() {
 
     private val appIconCache = HashMap<String, android.graphics.Bitmap?>()
+    private val lastLogged = HashMap<String, Long>()
 
     companion object {
         @Volatile private var instance: NotifService? = null
@@ -97,7 +98,12 @@ class NotifService : NotificationListenerService() {
         if (sbn.packageName == packageName) return
         ensureService()
         val n = sbn.notification
-        AodLog.add("notification posted pkg=${sbn.packageName} category=${n.category}")
+        // Log each app's posts at most once a minute, so a chatty app can't push the useful lines out of the log.
+        val nowMs = System.currentTimeMillis()
+        if (nowMs - (lastLogged[sbn.packageName] ?: 0L) > 60_000L) {
+            lastLogged[sbn.packageName] = nowMs
+            AodLog.add("notification posted pkg=${sbn.packageName} category=${n.category}")
+        }
         if (n.fullScreenIntent != null || n.category == Notification.CATEGORY_CALL || n.category == Notification.CATEGORY_ALARM) {
             AodState.lastFullScreenAt = System.currentTimeMillis()
         } else if (sbn.packageName != packageName) {

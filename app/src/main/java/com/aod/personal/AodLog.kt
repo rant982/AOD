@@ -82,14 +82,14 @@ object AodLog {
         val f = file ?: return
         try {
             f.appendText(SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US).format(Date()) + "  " + msg + "\n")
-            if (f.length() > 60_000) f.writeText(f.readLines().takeLast(300).joinToString("\n") + "\n")
+            if (f.length() > 200_000) f.writeText(f.readLines().takeLast(1500).joinToString("\n") + "\n")
         } catch (e: Exception) {
         }
     }
 
     @Synchronized
     fun read(): String = try {
-        file?.readLines()?.takeLast(300)?.joinToString("\n") ?: ""
+        file?.readLines()?.takeLast(1500)?.joinToString("\n") ?: ""
     } catch (e: Exception) {
         ""
     }
