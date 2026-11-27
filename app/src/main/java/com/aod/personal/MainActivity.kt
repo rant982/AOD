@@ -303,8 +303,13 @@ private fun SettingsScreen() {
         item { SliderRow("Spacing between items", Prefs.blockGap, 0f..60f) { Prefs.blockGap = it } }
         item { Text("Daytime brightness follows your phone's brightness setting (including automatic).", style = MaterialTheme.typography.bodySmall) }
         item { SwitchRow("Dim at night when Do Not Disturb is on", Prefs.nightDim) { Prefs.nightDim = it } }
-        item { SliderRow("Night brightness (left = dimmest that is still visible)", Prefs.nightBrightness.coerceAtLeast(0.02f), 0.02f..0.2f) { Prefs.nightBrightness = it } }
-        item { SliderRow("Night: how bright the clock and icons are (left = darker)", Prefs.nightContent, 0.1f..1f) { Prefs.nightContent = it } }
+        item {
+            // One control for both: it sets how bright the screen's backlight is and how bright the clock and icons are drawn.
+            SliderRow("Night brightness (left = dimmest that is still visible)", ((Prefs.nightContent - 0.2f) / 0.75f).coerceIn(0f, 1f), 0f..1f) { v ->
+                Prefs.nightContent = 0.2f + 0.75f * v
+                Prefs.nightBrightness = 0.02f + 0.3f * v * v
+            }
+        }
 
         item { Header("Screen order (top to bottom)") }
         item { OrderEditor() }
