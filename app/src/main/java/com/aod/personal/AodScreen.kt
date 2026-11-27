@@ -511,6 +511,17 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                         replyNote = if (ok) "Reply sent to ${n.app}" else "Couldn't send the reply"
                                     }
                                 )
+                                // One-tap reply starters under an open message: the phone's suggested replies, then yours. Tapping one only
+                                // fills the reply box; nothing is sent until you press and hold "Hold to send".
+                                if (open && !replyingNow && n.reply != null && Prefs.allowReply) {
+                                    val quick = (n.suggestions + Prefs.quickReplies.split(",").map { it.trim() }.filter { it.isNotEmpty() }).distinct().take(8)
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        quick.forEach { q -> HideChip(q, dim, "\u21A9") { replying = n.key; replyText = q } }
+                                    }
+                                }
                                 if (open && !replyingNow) FlowRow(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                                     verticalArrangement = Arrangement.spacedBy(6.dp)

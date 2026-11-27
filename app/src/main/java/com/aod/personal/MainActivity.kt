@@ -372,6 +372,10 @@ private fun SettingsScreen() {
         item { SwitchRow("Flash the icon of a new notification", Prefs.flashIcon) { Prefs.flashIcon = it } }
         item { SwitchRow("Allow replying from the AOD (a Reply button on messages that accept replies; sending needs a 1.5 s press and hold)", Prefs.allowReply) { Prefs.allowReply = it } }
         item {
+            var qr by remember { mutableStateOf(Prefs.quickReplies) }
+            OutlinedTextField(qr, { qr = it; Prefs.quickReplies = it }, Modifier.fillMaxWidth(), label = { Text("Your quick replies (separated by commas)") }, singleLine = true)
+        }
+        item {
             var secs by remember { mutableIntStateOf(Prefs.flashSeconds) }
             val opts = listOf(3, 5, 10, 30, 60)
             Chips("How long the icon flashes", opts.map { "$it s" }, opts.indexOf(secs).coerceAtLeast(0)) { secs = opts[it]; Prefs.flashSeconds = secs }

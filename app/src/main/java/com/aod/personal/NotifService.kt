@@ -93,6 +93,23 @@ class NotifService : NotificationListenerService() {
         watched = emptyList()
     }
 
+    /** Suggested replies: the phone's own smart replies for this message (on-device, nothing is sent anywhere), plus any the app offers. */
+    private fun suggestionsFor(sbn: StatusBarNotification): List<String> {
+        val out = mutableListOf<String>()
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                val r = NotificationListenerService.Ranking()
+                if (currentRanking.getRanking(sbn.key, r)) r.smartReplies?.forEach { out.add(it.toString()) }
+            }
+        } catch (e: Exception) {
+        }
+        try {
+            sbn.notification.actions?.forEach { a -> a.remoteInputs?.forEach { ri -> ri.choices?.forEach { out.add(it.toString()) } } }
+        } catch (e: Exception) {
+        }
+        return out.map { it.trim() }.filter { it.isNotEmpty() && it.length <= 60 }.distinct().take(4)
+    }
+
     /** The whole message: the expanded text, an inbox list, or all the lines of a chat, whichever the app provides. */
     @Suppress("DEPRECATION")
     private fun fullText(ex: android.os.Bundle): String {
@@ -167,6 +184,7 @@ class NotifService : NotificationListenerService() {
                 text = (ex.getCharSequence(Notification.EXTRA_TEXT) ?: ex.getCharSequence(Notification.EXTRA_BIG_TEXT))?.toString().orEmpty(),
                 full = fullText(ex),
                 reply = sbn.notification.actions?.firstOrNull { a -> a.remoteInputs?.any { it.allowFreeFormInput } == true },
+                suggestions = suggestionsFor(sbn),
                 intent = sbn.notification.contentIntent,
                 color = sbn.notification.color,
                 appIcon = appIconCache.getOrPut(sbn.packageName) { try {

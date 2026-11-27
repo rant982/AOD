@@ -112,6 +112,8 @@ object Prefs {
     var flashIcon by B("flashIcon", true)
     /** Show a Reply button on notifications that accept replies (sending needs a long press). */
     var allowReply by B("allowReply", true)
+    /** Your own one-tap reply starters, comma separated; shown beside the phone's suggested replies. */
+    var quickReplies by S("quickReplies", "Yes,No,OK,Thanks,On my way")
     /** How long a new notification's icon keeps flashing, in seconds. */
     var flashSeconds by I("flashSeconds", 3)
     var showBadge by B("showBadge", true)
