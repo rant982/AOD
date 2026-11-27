@@ -185,6 +185,11 @@ class NotifService : NotificationListenerService() {
                 full = fullText(ex),
                 reply = sbn.notification.actions?.firstOrNull { a -> a.remoteInputs?.any { it.allowFreeFormInput } == true },
                 suggestions = suggestionsFor(sbn),
+                // The app's own "Mark as read" (e.g. WhatsApp): marks the chat read on every device, unlike clearing it here.
+                markRead = sbn.notification.actions?.firstOrNull { a ->
+                    (android.os.Build.VERSION.SDK_INT >= 28 && a.semanticAction == Notification.Action.SEMANTIC_ACTION_MARK_AS_READ) ||
+                        a.title?.toString()?.contains("mark as read", ignoreCase = true) == true
+                },
                 intent = sbn.notification.contentIntent,
                 color = sbn.notification.color,
                 appIcon = appIconCache.getOrPut(sbn.packageName) { try {

@@ -588,6 +588,23 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                         NotifService.dismiss(n.key)
                                         expanded = next
                                     }
+                                    n.markRead?.let { a ->
+                                        HideChip("Mark as read", dim, "\u2713") {
+                                            val ok = try {
+                                                a.actionIntent.send()
+                                                true
+                                            } catch (e: Exception) {
+                                                AodLog.add("mark as read failed: ${e.message}")
+                                                false
+                                            }
+                                            AodLog.add("mark as read pkg=${n.pkg} sent=$ok")
+                                            if (ok) {
+                                                val next = same.firstOrNull { x -> x.key != n.key }?.key
+                                                NotifService.dismiss(n.key)
+                                                expanded = next
+                                            }
+                                        }
+                                    }
                                     if (same.size > 1) {
                                         HideChip("Clear all ${same.size}", dim) {
                                             NotifService.dismissAll(same.map { x -> x.key })
