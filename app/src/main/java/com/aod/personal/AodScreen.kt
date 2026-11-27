@@ -559,6 +559,21 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                     onSend = {
                                         val ok = sendReply(ctx, n, replyText)
                                         AodLog.add("reply to ${n.pkg} sent=$ok chars=${replyText.length}")
+                                        if (ok) {
+                                            // You've answered, so it counts as read: tell the app (if it has "Mark as read") and take it off the AOD.
+                                            // The app often re-posts the chat with your reply added, so clear it again a moment later.
+                                            try {
+                                                n.markRead?.actionIntent?.send()
+                                            } catch (e: Exception) {
+                                                AodLog.add("mark as read after reply failed: ${e.message}")
+                                            }
+                                            NotifService.dismiss(n.key)
+                                            expanded = notifs.firstOrNull { x -> x.pkg == n.pkg && x.key != n.key }?.key
+                                            uiScope.launch {
+                                                delay(3_000); NotifService.dismiss(n.key)
+                                                delay(5_000); NotifService.dismiss(n.key)
+                                            }
+                                        }
                                         replying = null; replyText = ""
                                         replyNote = if (ok) "Reply sent to ${n.app}" else "Couldn't send the reply"
                                     }
