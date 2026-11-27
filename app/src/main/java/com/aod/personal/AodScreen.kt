@@ -284,6 +284,32 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
         delay(10_000)
         showVersion = false
     }
+    // Hold the top-right corner for 2 s: check GitHub for a newer build. If there is one, tap the message to unlock and update.
+    var updateMsg by remember { mutableStateOf<String?>(null) }
+    var updateAvail by remember { mutableStateOf<Updater.Latest?>(null) }
+    val uiScope = rememberCoroutineScope()
+    LaunchedEffect(updateMsg) {
+        if (updateMsg != null && updateAvail == null) {
+            delay(8_000)
+            updateMsg = null
+        } else if (updateMsg != null) {
+            delay(30_000)
+            updateMsg = null
+            updateAvail = null
+        }
+    }
+    fun checkForUpdate() {
+        updateAvail = null
+        updateMsg = "Checking for updates\u2026"
+        uiScope.launch {
+            val (l, err) = withContext(Dispatchers.IO) { Updater.check() }
+            when {
+                err != null -> updateMsg = "Couldn't check: $err"
+                l != null && l.build > Updater.installedBuild(ctx) -> { updateAvail = l; updateMsg = "Update ${l.name} ready \u2013 tap here" }
+                else -> updateMsg = "You have the latest (v${appVersion(ctx)})"
+            }
+        }
+    }
 
 
     Box(
@@ -300,10 +326,36 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
             }
     ) {
         if (!covered) Box(
-            Modifier.align(Alignment.TopEnd).systemBarsPadding().size(72.dp, 56.dp).onTapOnly { versionTap++ },
+            Modifier
+                .align(Alignment.TopEnd).systemBarsPadding()
+                .size(if (updateMsg != null) 300.dp else 72.dp, 56.dp)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        // Press and hold for 2 seconds: look for an update.
+                        onPress = {
+                            val job = uiScope.launch {
+                                delay(2_000)
+                                checkForUpdate()
+                            }
+                            tryAwaitRelease()
+                            job.cancel()
+                        },
+                        onTap = {
+                            val l = updateAvail
+                            if (l != null) {
+                                activity?.let { a -> openIntentAfterUnlock(a, Intent(a, MainActivity::class.java).putExtra("update", true), "update") }
+                            } else versionTap++
+                        }
+                    )
+                },
             contentAlignment = Alignment.TopEnd
         ) {
-            if (showVersion) Text(
+            val msg = updateMsg
+            if (msg != null) Text(
+                msg, color = (if (updateAvail != null) accent else dim).copy(alpha = 0.9f), fontSize = 12.sp, textAlign = TextAlign.End,
+                fontWeight = if (updateAvail != null) FontWeight.Bold else FontWeight.Normal,
+                modifier = Modifier.padding(12.dp)
+            ) else if (showVersion) Text(
                 "v${appVersion(ctx)}", color = dim.copy(alpha = 0.5f), fontSize = 11.sp,
                 modifier = Modifier.padding(12.dp)
             )

@@ -773,11 +773,28 @@ private fun SettingsPreview() {
 @Composable
 private fun UpdateCard(ctx: Context) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // Opened from the AOD's "Update ready" message: start the update as soon as the check finishes.
+    var auto by remember { mutableStateOf((ctx as? android.app.Activity)?.intent?.getBooleanExtra("update", false) == true) }
     var latest by remember { mutableStateOf<Updater.Latest?>(null) }
     var msg by remember { mutableStateOf("Checking for updates\u2026") }
     var busy by remember { mutableStateOf(false) }
     var progress by remember { mutableIntStateOf(0) }
     val mine = remember { Updater.installedBuild(ctx) }
+    fun startInstall(l: Updater.Latest) {
+        if (!ctx.packageManager.canRequestPackageInstalls()) {
+            msg = "Allow \"Install unknown apps\" for My AOD, come back, then press Update now again."
+            ctx.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}")))
+        } else {
+            busy = true
+            progress = 0
+            msg = "Downloading ${l.name}\u2026"
+            scope.launch {
+                val err = withContext(Dispatchers.IO) { Updater.install(ctx, l) { progress = it } }
+                msg = if (err != null) "Update failed: $err" else "Downloaded. Confirm the install when Android asks."
+                busy = false
+            }
+        }
+    }
     fun check() {
         busy = true
         msg = "Checking for updates\u2026"
@@ -791,6 +808,10 @@ private fun UpdateCard(ctx: Context) {
                 else -> ""
             }
             busy = false
+            if (auto && l != null && l.build > mine) {
+                auto = false
+                startInstall(l)
+            }
         }
     }
     LaunchedEffect(Unit) { check() }
@@ -801,21 +822,7 @@ private fun UpdateCard(ctx: Context) {
             if (busy && progress in 1..99) Text("Downloading\u2026 $progress%", style = MaterialTheme.typography.bodySmall)
             val l = latest
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (l != null && l.build > mine) Button({
-                    if (!ctx.packageManager.canRequestPackageInstalls()) {
-                        msg = "Allow \"Install unknown apps\" for My AOD, come back, then press Update now again."
-                        ctx.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}")))
-                    } else {
-                        busy = true
-                        progress = 0
-                        msg = "Downloading ${l.name}\u2026"
-                        scope.launch {
-                            val err = withContext(Dispatchers.IO) { Updater.install(ctx, l) { progress = it } }
-                            msg = if (err != null) "Update failed: $err" else "Downloaded. Confirm the install when Android asks."
-                            busy = false
-                        }
-                    }
-                }, enabled = !busy) { Text("Update now") }
+                if (l != null && l.build > mine) Button({ startInstall(l) }, enabled = !busy) { Text("Update now") }
                 OutlinedButton({ check() }, enabled = !busy) { Text("Check again") }
                 OutlinedButton({ ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Updater.PAGE))) }) { Text("Releases page") }
             }
