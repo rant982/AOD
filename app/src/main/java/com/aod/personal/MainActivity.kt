@@ -409,6 +409,15 @@ private fun SettingsScreen() {
                 }
             }
         }
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                SwitchRow("At night, also set the phone's own brightness to minimum while the AOD is up (a lock-screen flash is then dim)", Prefs.nightSystem) { Prefs.nightSystem = it; if (!it) NightBrightness.restore(ctx) }
+                if (!IdleTimeout.canWrite(ctx)) {
+                    Text("Needs \"Modify system settings\" (the same permission as the idle timer).", style = MaterialTheme.typography.bodySmall)
+                    Button({ ctx.startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${ctx.packageName}"))) }) { Text("Allow") }
+                }
+            }
+        }
         item { SwitchRow("Pixel shift (burn-in protection)", Prefs.pixelShift) { Prefs.pixelShift = it } }
         item {
             var amount by remember { mutableIntStateOf(Prefs.shiftAmount) }

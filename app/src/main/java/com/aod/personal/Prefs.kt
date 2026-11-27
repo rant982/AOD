@@ -149,6 +149,12 @@ object Prefs {
     var openTaps by I("openTaps", 2)
     var powerOff by B("powerOff", false)
 
+    /** At night, also lower the phone's own brightness so a lock-screen flash between AOD runs is dim. */
+    var nightSystem by B("nightSystem", true)
+    /** The phone's brightness mode/level saved while dimmed for the night (-1 = not dimmed). */
+    var nbMode by I("nbMode", -1)
+    var nbValue by I("nbValue", -1)
+
     /** Minutes of no use before the AOD takes over from the normal screen (0 = leave the phone's own screen timeout alone). */
     var idleMinutes by I("idleMinutes", 0)
     /** The phone's own screen timeout (ms) saved while we override it, -1 when not overriding. */

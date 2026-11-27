@@ -189,6 +189,7 @@ class AodService : Service() {
         running = false
         AodLog.add("service destroyed")
         IdleTimeout.apply(this, false) // give the phone its own screen timeout back
+        NightBrightness.restore(this)
         unregisterReceiver(screenReceiver)
         unregisterReceiver(unlockReceiver)
         handler.removeCallbacksAndMessages(null)

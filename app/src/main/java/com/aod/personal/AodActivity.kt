@@ -209,6 +209,7 @@ class AodActivity : ComponentActivity(), SensorEventListener {
         lp.screenBrightness = if (night) Prefs.nightBrightness.coerceAtLeast(0.02f) else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         AodLog.add("brightness night=$night value=${lp.screenBrightness}")
         window.attributes = lp
+        if (!preview) NightBrightness.apply(applicationContext, night)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -263,6 +264,7 @@ class AodActivity : ComponentActivity(), SensorEventListener {
     override fun finish() {
         selfFinished = true
         Prefs.aodHeartbeat = 0 // closed on purpose: do not resume it after a restart
+        if (!preview) NightBrightness.restore(applicationContext) // back to the phone's own brightness
         AodLog.add("AOD finish() called from: " + Throwable().stackTrace.drop(1).take(5).joinToString(" < ") { it.className.substringAfterLast('.') + "." + it.methodName })
         super.finish()
     }
