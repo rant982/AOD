@@ -166,6 +166,7 @@ class NotifService : NotificationListenerService() {
                 title = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty(),
                 text = (ex.getCharSequence(Notification.EXTRA_TEXT) ?: ex.getCharSequence(Notification.EXTRA_BIG_TEXT))?.toString().orEmpty(),
                 full = fullText(ex),
+                reply = sbn.notification.actions?.firstOrNull { a -> a.remoteInputs?.any { it.allowFreeFormInput } == true },
                 intent = sbn.notification.contentIntent,
                 color = sbn.notification.color,
                 appIcon = appIconCache.getOrPut(sbn.packageName) { try {

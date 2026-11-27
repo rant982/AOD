@@ -110,6 +110,8 @@ object Prefs {
     var showPreview by B("alwaysPreview", false)
     var edgeLight by B("edgeLight", true)
     var flashIcon by B("flashIcon", true)
+    /** Show a Reply button on notifications that accept replies (sending needs a long press). */
+    var allowReply by B("allowReply", true)
     /** How long a new notification's icon keeps flashing, in seconds. */
     var flashSeconds by I("flashSeconds", 3)
     var showBadge by B("showBadge", true)

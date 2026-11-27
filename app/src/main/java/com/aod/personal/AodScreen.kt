@@ -1,6 +1,17 @@
 package com.aod.personal
 
 import android.app.Activity
+import android.app.RemoteInput
+import android.os.Bundle
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.geometry.Size
 import android.app.NotificationManager
 import android.hardware.biometrics.BiometricManager
 import android.hardware.biometrics.BiometricPrompt
@@ -151,6 +162,11 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
     // Weather: tap once = full detail and a fresh forecast; tap again (within 10 seconds) = open the forecast.
     var weatherExpanded by remember { mutableStateOf(false) }
     var batteryExpanded by remember { mutableStateOf(false) }
+    var replying by remember { mutableStateOf<String?>(null) } // key of the notification being replied to
+    var replyText by remember { mutableStateOf("") }
+    var replyNote by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(replyNote) { if (replyNote != null) { delay(4_000); replyNote = null } }
+    LaunchedEffect(covered) { if (covered) { replying = null; replyText = "" } } // never leave a half-typed reply in a pocket
     var showFull by remember { mutableStateOf<String?>(null) } // key of the notification whose whole text is showing
     LaunchedEffect(weatherExpanded) {
         if (weatherExpanded) {
@@ -296,6 +312,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
             Modifier
                 .fillMaxSize()
                 .systemBarsPadding()
+                .imePadding()
                 .padding(24.dp)
                 .offset { shiftAnim }
                 .graphicsLayer { alpha = dimK },
@@ -319,9 +336,11 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
 
             // Reading a long message: the weather, battery, calendar and music lines step aside so everything still fits on screen.
             val reading = showFull != null && showFull == expanded
+            val replyingNow = replying != null && replying == expanded
             // Blocks are drawn in the order chosen in Settings.
             order.forEachIndexed { idx, key ->
                 if (reading && key in setOf("BATTERY", "WEATHER", "CALENDAR", "MUSIC")) return@forEachIndexed
+                if (replyingNow && key != "NOTIFS") return@forEachIndexed // typing a reply: only the message and the reply box
                 when (key) {
                     "LOGO" -> Logo(accent)
 
@@ -400,7 +419,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
 
                     "NOTIFS" -> if (Prefs.showNotifs && notifs.isNotEmpty()) {
                         val expandedPkg = notifs.firstOrNull { it.key == expanded }?.pkg
-                        FlowRow(
+                        if (!replyingNow) FlowRow(
                             Modifier.padding(top = 8.dp).fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally)
                         ) {
@@ -444,7 +463,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                 }
                             }
                         }
-                        val shown = if (Prefs.showPreview && !reading) notifs.take(3) else notifs.filter { it.key == expanded }
+                        val shown = if (Prefs.showPreview && !reading && !replyingNow) notifs.take(3) else notifs.filter { it.key == expanded }
                         Column(Modifier.padding(top = 4.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                             shown.forEach { n ->
                                 val open = n.key == expanded
@@ -478,7 +497,17 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                         )
                                         .padding(vertical = 6.dp, horizontal = 8.dp)
                                 )
-                                if (open) FlowRow(
+                                if (open && replyingNow) ReplyBox(
+                                    text = replyText, onText = { replyText = it }, color = dim, accent = accent,
+                                    onCancel = { replying = null; replyText = "" },
+                                    onSend = {
+                                        val ok = sendReply(ctx, n, replyText)
+                                        AodLog.add("reply to ${n.pkg} sent=$ok chars=${replyText.length}")
+                                        replying = null; replyText = ""
+                                        replyNote = if (ok) "Reply sent to ${n.app}" else "Couldn't send the reply"
+                                    }
+                                )
+                                if (open && !replyingNow) FlowRow(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                                     verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
@@ -489,6 +518,7 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                                         NotifService.dismiss(n.key)
                                         expanded = next
                                     }
+                                    if (n.reply != null && Prefs.allowReply) HideChip("Reply", dim, "↩") { replying = n.key; replyText = "" }
                                     if (same.size > 1) {
                                         HideChip("Clear all ${same.size}", dim) {
                                             NotifService.dismissAll(same.map { x -> x.key })
@@ -520,6 +550,13 @@ fun AodScreen(covered: Boolean, onWake: () -> Unit) {
                     }
                 }
             }
+        }
+        replyNote?.let { t ->
+            Text(
+                t, color = dim, fontSize = 13.sp,
+                modifier = Modifier.align(Alignment.BottomCenter).systemBarsPadding().padding(bottom = 24.dp)
+                    .background(Color(0xFF222222), RoundedCornerShape(24.dp)).padding(horizontal = 16.dp, vertical = 8.dp)
+            )
         }
         undo?.let { u ->
             Row(
@@ -845,4 +882,81 @@ fun batteryLine(level: Int, charging: Boolean, b: BatInfo, showMa: Boolean, expa
     val current = if (showMa && ma != null) "  " + (if (ma == 0) "0" else String.format(Locale.US, "%+d", ma)) + " mA" else ""
     val wireless = if (charging && b.wireless) "  wireless" else ""
     return "$symbol $level%$current$wireless"
+}
+
+
+/** Sends a reply through the notification's own Reply action (the same way the lock screen's quick reply does). */
+private fun sendReply(ctx: Context, n: NotifItem, text: String): Boolean {
+    val action = n.reply ?: return false
+    val inputs = action.remoteInputs ?: return false
+    return try {
+        val intent = Intent().addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+        val results = Bundle()
+        inputs.forEach { results.putCharSequence(it.resultKey, text) }
+        RemoteInput.addResultsToIntent(inputs, intent, results)
+        action.actionIntent.send(ctx, 0, intent)
+        true
+    } catch (e: Exception) {
+        AodLog.add("reply failed: ${e.message}")
+        false
+    }
+}
+
+/** Type a reply, then press and hold "Hold to send" for 1.5 s. A short touch (or a pocket) never sends anything. */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@Composable
+private fun ReplyBox(text: String, onText: (String) -> Unit, color: Color, accent: Color, onSend: () -> Unit, onCancel: () -> Unit) {
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) {
+        delay(150)
+        try {
+            focus.requestFocus()
+            keyboard?.show()
+        } catch (e: Exception) {
+        }
+    }
+    val hold = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    var sent by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(16.dp)
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        BasicTextField(
+            value = text, onValueChange = onText,
+            textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+            cursorBrush = SolidColor(accent),
+            maxLines = 5,
+            modifier = Modifier.fillMaxWidth().focusRequester(focus).border(1.dp, color.copy(alpha = 0.6f), RoundedCornerShape(12.dp)).padding(12.dp),
+            decorationBox = { inner ->
+                if (text.isEmpty()) Text("Type your reply\u2026", color = color.copy(alpha = 0.5f), fontSize = 16.sp)
+                inner()
+            }
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            HideChip("Cancel", color) { onCancel() }
+            Box(
+                Modifier
+                    .border(1.5.dp, accent.copy(alpha = if (text.isBlank()) 0.35f else 0.9f), shape)
+                    .drawBehind { drawRoundRect(accent.copy(alpha = 0.45f), size = Size(size.width * hold.value, size.height), cornerRadius = CornerRadius(16.dp.toPx())) }
+                    .pointerInput(text) {
+                        detectTapGestures(onPress = {
+                            if (text.isNotBlank() && !sent) {
+                                val job = scope.launch {
+                                    hold.snapTo(0f)
+                                    hold.animateTo(1f, tween(1500, easing = LinearEasing))
+                                    sent = true
+                                    onSend()
+                                }
+                                tryAwaitRelease()
+                                job.cancel()
+                                if (!sent) hold.snapTo(0f)
+                            }
+                        })
+                    }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text("Hold to send", color = color.copy(alpha = if (text.isBlank()) 0.4f else 1f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
 }

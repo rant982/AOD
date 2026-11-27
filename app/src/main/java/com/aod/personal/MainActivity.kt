@@ -370,6 +370,7 @@ private fun SettingsScreen() {
         item { SwitchRow("Always show notification text (off = tap an icon to read it)", Prefs.showPreview) { Prefs.showPreview = it } }
         item { SwitchRow("Edge lighting on new notification", Prefs.edgeLight) { Prefs.edgeLight = it } }
         item { SwitchRow("Flash the icon of a new notification", Prefs.flashIcon) { Prefs.flashIcon = it } }
+        item { SwitchRow("Allow replying from the AOD (a Reply button on messages that accept replies; sending needs a 1.5 s press and hold)", Prefs.allowReply) { Prefs.allowReply = it } }
         item {
             var secs by remember { mutableIntStateOf(Prefs.flashSeconds) }
             val opts = listOf(3, 5, 10, 30, 60)
